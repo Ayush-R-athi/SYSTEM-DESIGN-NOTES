@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design for Beginners – Notes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #1e2130;
+    --border: #2d3148;
+    --accent: #5b8dee;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --code-bg: #13161f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 860px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 2.5rem 2rem;
+    background: linear-gradient(135deg, #1a1d27 0%, #1e2130 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(91,141,238,0.15) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .header .tag {
+    display: inline-block;
+    background: rgba(91,141,238,0.15);
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 20px;
+    border: 1px solid rgba(91,141,238,0.3);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+  }
+  .header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 0.5rem;
+  }
+  .header p { color: var(--muted); font-size: 0.95rem; }
+
+  /* TOC */
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .toc h2 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
+  .toc ol { padding-left: 1.4rem; }
+  .toc li { margin-bottom: 0.4rem; }
+  .toc a { color: var(--accent); text-decoration: none; font-size: 0.93rem; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* Section */
+  .section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-num {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.9rem; color: #fff;
+    flex-shrink: 0;
+  }
+  .section h2 { font-size: 1.25rem; font-weight: 700; color: #fff; }
+
+  p { margin-bottom: 1rem; color: var(--text); font-size: 0.96rem; }
+  p:last-child { margin-bottom: 0; }
+
+  /* Key Point box */
+  .keypoint {
+    background: rgba(91,141,238,0.08);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem;
+    margin: 1.2rem 0;
+    font-size: 0.93rem;
+  }
+  .keypoint strong { color: var(--accent); }
+
+  /* Warning box */
+  .warn {
+    background: rgba(251,191,36,0.08);
+    border-left: 3px solid var(--yellow);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem;
+    margin: 1.2rem 0;
+    font-size: 0.93rem;
+  }
+  .warn strong { color: var(--yellow); }
+
+  /* Success box */
+  .success {
+    background: rgba(52,211,153,0.08);
+    border-left: 3px solid var(--green);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem;
+    margin: 1.2rem 0;
+    font-size: 0.93rem;
+  }
+  .success strong { color: var(--green); }
+
+  /* Comparison grid */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.2rem 0;
+  }
+  .compare-card {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem;
+  }
+  .compare-card h4 {
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .compare-card.vs-a h4 { color: var(--accent); }
+  .compare-card.vs-b h4 { color: var(--accent2); }
+  .compare-card ul { padding-left: 1.2rem; }
+  .compare-card li { font-size: 0.88rem; color: var(--muted); margin-bottom: 0.35rem; }
+
+  /* Flow diagram */
+  .flow {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1.2rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    overflow-x: auto;
+  }
+  .flow-title {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 1rem;
+  }
+
+  /* Node boxes in diagrams */
+  .diagram {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+  }
+  .node {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .node.blue { border-color: var(--accent); color: var(--accent); background: rgba(91,141,238,0.1); }
+  .node.purple { border-color: var(--accent2); color: var(--accent2); background: rgba(167,139,250,0.1); }
+  .node.green { border-color: var(--green); color: var(--green); background: rgba(52,211,153,0.1); }
+  .node.yellow { border-color: var(--yellow); color: var(--yellow); background: rgba(251,191,36,0.1); }
+  .node.red { border-color: var(--red); color: var(--red); background: rgba(248,113,113,0.1); }
+  .arrow { color: var(--muted); font-size: 1.2rem; }
+
+  /* SVG diagrams */
+  svg text { font-family: 'Inter', sans-serif; }
+
+  /* Sub-heading */
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    margin: 1.4rem 0 0.7rem;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.65rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 0 0.2rem;
+  }
+  .badge-blue { background: rgba(91,141,238,0.15); color: var(--accent); border: 1px solid rgba(91,141,238,0.3); }
+  .badge-green { background: rgba(52,211,153,0.15); color: var(--green); border: 1px solid rgba(52,211,153,0.3); }
+  .badge-yellow { background: rgba(251,191,36,0.15); color: var(--yellow); border: 1px solid rgba(251,191,36,0.3); }
+  .badge-red { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .badge-purple { background: rgba(167,139,250,0.15); color: var(--accent2); border: 1px solid rgba(167,139,250,0.3); }
+
+  /* Summary table */
+  table { width: 100%; border-collapse: collapse; margin: 1.2rem 0; font-size: 0.88rem; }
+  th { background: var(--code-bg); color: var(--accent); padding: 0.7rem 1rem; text-align: left; font-weight: 600; border-bottom: 2px solid var(--border); }
+  td { padding: 0.65rem 1rem; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Analog comparison */
+  .analogy {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin: 1rem 0;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  .analogy-icon { font-size: 1.5rem; flex-shrink: 0; }
+  .analogy-text { font-size: 0.9rem; }
+  .analogy-text strong { color: #fff; }
+
+  /* Final summary card */
+  .final-flow {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1.2rem 0;
+  }
+  .final-flow .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .final-flow .step:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+  .final-flow .step-num {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem; font-weight: 700; color: #fff;
+    flex-shrink: 0; margin-top: 0.1rem;
+  }
+  .final-flow .step-content strong { color: #fff; font-size: 0.93rem; display: block; margin-bottom: 0.2rem; }
+  .final-flow .step-content span { color: var(--muted); font-size: 0.86rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="tag">📓 Study Notes — Video 1</div>
+    <h1>System Design for Beginners</h1>
+    <p>All key concepts, diagrams & memory tricks from the first video of the playlist</p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 What's Inside</h2>
+    <ol>
+      <li><a href="#s1">Client & Server — The Basics</a></li>
+      <li><a href="#s2">IP Address & DNS</a></li>
+      <li><a href="#s3">Vertical Scaling (Scale Up)</a></li>
+      <li><a href="#s4">Horizontal Scaling (Scale Out)</a></li>
+      <li><a href="#s5">Load Balancer</a></li>
+      <li><a href="#s6">API Gateway & Microservices</a></li>
+      <li><a href="#s7">Queue Systems & Async Processing</a></li>
+      <li><a href="#s8">Pub/Sub & Fan-Out Architecture</a></li>
+      <li><a href="#s9">Rate Limiting</a></li>
+      <li><a href="#s10">Database Scaling & Caching</a></li>
+      <li><a href="#s11">CDN (Content Delivery Network)</a></li>
+      <li><a href="#s12">Full System Overview</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>Client & Server — The Basics</h2>
+    </div>
+
+    <p>At the highest level, every system has just <strong>two things</strong>:</p>
+
+    <div class="diagram">
+      <div class="node blue">📱 Client<br><small>(Mobile / Laptop / IoT)</small></div>
+      <div class="arrow">⟷</div>
+      <div class="node green">🖥️ Server<br><small>(Machine with Public IP)</small></div>
+    </div>
+
+    <div class="keypoint">
+      <strong>Client</strong> = Anyone using your app (phone, laptop, browser).<br>
+      <strong>Server</strong> = A machine that runs 24/7 and has a public IP address so the world can reach it.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">☁️</div>
+      <div class="analogy-text">
+        <strong>Cloud is not magic — it's someone else's machine.</strong><br>
+        AWS, DigitalOcean etc. just give you a virtual machine that runs 24/7 with a public IP. You could use your own laptop as a server too, but nobody wants that!
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>IP Address & DNS</h2>
+    </div>
+
+    <p>Every server on the internet has an <strong>IP address</strong> (like <code style="background:var(--code-bg);padding:0.1rem 0.4rem;border-radius:4px;color:var(--accent2)">10.2.3.4</code>). But numbers are hard to remember — nobody remembers phone numbers either!</p>
+
+    <p>That's why we use <strong>Domain Names</strong> like <code style="background:var(--code-bg);padding:0.1rem 0.4rem;border-radius:4px;color:var(--accent2)">amazon.com</code>. The system that translates domain names → IP addresses is called <strong>DNS</strong>.</p>
+
+    <h3>How DNS Resolution Works</h3>
+
+    <div class="flow">
+      <div class="flow-title">🔄 Request Flow — DNS Resolution</div>
+      <pre style="color:var(--text);line-height:2">
+  You type amazon.com
+         |
+         ▼
+  ┌─────────────┐      "What's the IP
+  │  DNS Server │◄──── for amazon.com?"
+  │  (Directory)│
+  └─────────────┘
+         |
+         │  Returns: 10.2.3.4
+         ▼
+  Your browser now connects
+  directly to IP 10.2.3.4
+         |
+         ▼
+  ┌─────────────┐
+  │   Server    │ ──► Sends back the webpage
+  └─────────────┘</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>DNS = Phone book of the internet.</strong><br>
+      It maps <code style="background:var(--code-bg);padding:0.1rem 0.3rem;border-radius:4px;">amazon.com → 10.2.3.4</code>. When you buy a domain and point it to your server, you're updating this phone book.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🏠</div>
+      <div class="analogy-text">
+        <strong>IP address is like your home address.</strong><br>
+        Street name, house number, city, pincode, state, country — all of these together help someone find you. An IP does the same for servers.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>Vertical Scaling (Scale Up)</h2>
+    </div>
+
+    <p>Imagine your server starts with <span class="badge badge-blue">2 CPU</span> <span class="badge badge-blue">4 GB RAM</span>. As more users come, the server gets overwhelmed and <strong>crashes</strong>.</p>
+
+    <p>The first instinct? <strong>Make the server bigger!</strong> Add more CPU and RAM to the same machine.</p>
+
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>Before (Small Server)</h4>
+        <ul>
+          <li>2 CPU, 4 GB RAM</li>
+          <li>Can handle small traffic</li>
+          <li>Crashes under load</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>After (Vertical Scale Up)</h4>
+        <ul>
+          <li>64 CPU, 128 GB RAM</li>
+          <li>Handles much more traffic</li>
+          <li>Still has a limit!</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ Problems with Vertical Scaling:</strong><br>
+      1. <strong>Downtime required</strong> — You can't add CPU/RAM to a running machine. It needs a restart. Even 1 minute of downtime costs Amazon millions.<br>
+      2. <strong>Resource waste</strong> — You set up the machine for peak traffic, but 90% of the time you're only using 10% of it. Money wasted!<br>
+      3. <strong>Hard limit</strong> — You can't upgrade forever. There's a physical limit.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🍳</div>
+      <div class="analogy-text">
+        <strong>Restaurant analogy:</strong> If you usually have 2 cooks but sometimes rush comes, you could hire 10 full-time cooks. But you pay 10 salaries even when there's no rush. That's wasteful — vertical scaling is similar.
+      </div>
+    </div>
+
+    <div class="success">
+      <strong>✅ Cloud solves waste problem</strong> — AWS lets you say "start with 2 CPU, but auto-scale up when traffic increases, and scale down when it drops." You only pay for what you use.
+    </div>
+  </div>
+
+  <!-- SECTION 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>Horizontal Scaling (Scale Out)</h2>
+    </div>
+
+    <p>Instead of making <em>one server bigger</em>, what if you just <strong>add more servers</strong>?</p>
+
+    <div class="flow">
+      <div class="flow-title">📐 Horizontal Scaling</div>
+      <pre style="color:var(--text);line-height:2">
+  Instead of 1 big machine:
+
+  ┌──────────┐
+  │ Server 1 │  IP: 10.2.3.5
+  └──────────┘
+
+  You have multiple identical machines:
+
+  ┌──────────┐     ┌──────────┐     ┌──────────┐
+  │ Server 1 │     │ Server 2 │     │ Server 3 │
+  │ IP: ...5 │     │ IP: ...6 │     │ IP: ...7 │
+  └──────────┘     └──────────┘     └──────────┘</pre>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>Vertical Scaling</h4>
+        <ul>
+          <li>1 big server</li>
+          <li>Needs downtime to upgrade</li>
+          <li>Has a physical limit</li>
+          <li>Wastes resources off-peak</li>
+          <li>No load balancer needed</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>Horizontal Scaling</h4>
+        <ul>
+          <li>Many smaller servers</li>
+          <li>No downtime (add new servers while old ones run)</li>
+          <li>No hard limit (keep adding)</li>
+          <li>Scale down when quiet</li>
+          <li>Needs a Load Balancer</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🍳</div>
+      <div class="analogy-text">
+        <strong>Better restaurant analogy:</strong> You hire extra cooks per hour only when rush comes. When rush ends, they go home. You pay only for the hours worked. That's horizontal scaling!
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>Load Balancer</h2>
+    </div>
+
+    <p>With multiple servers, there's a problem: <strong>who decides which server handles which request?</strong> DNS can only point to one IP. That's where a <strong>Load Balancer</strong> comes in.</p>
+
+    <div class="flow">
+      <div class="flow-title">🔄 Load Balancer Flow</div>
+      <pre style="color:var(--text);line-height:2">
+  User types amazon.com
+         |
+         ▼
+  DNS returns Load Balancer IP (10.2.3.7)
+         |
+         ▼
+  ┌───────────────────┐
+  │   Load Balancer   │  ← Registered in DNS
+  │   IP: 10.2.3.7    │
+  └───────────────────┘
+         |
+    Distributes traffic
+    /       |       \
+   ▼        ▼        ▼
+┌──────┐ ┌──────┐ ┌──────┐
+│Srv 1 │ │Srv 2 │ │Srv 3 │
+└──────┘ └──────┘ └──────┘</pre>
+    </div>
+
+    <h3>How does it distribute traffic? (Round Robin)</h3>
+    <p>The simplest method is <strong>Round Robin</strong>: request 1 → Server 1, request 2 → Server 2, request 3 → Server 3, request 4 → Server 1 again... and so on.</p>
+
+    <div class="keypoint">
+      <strong>Load Balancer Intelligence:</strong> Before sending traffic to a new server, the LB checks if it's healthy (up and running for at least 1 minute). Only then does it route traffic there. In AWS, this is called <strong>ELB (Elastic Load Balancer)</strong>.
+    </div>
+
+    <h3>Scale Out & Scale In</h3>
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>Scale Out (add servers)</h4>
+        <ul>
+          <li>New server boots up</li>
+          <li>Register with load balancer</li>
+          <li>LB health checks it</li>
+          <li>Traffic starts flowing to it</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>Scale In (remove servers)</h4>
+        <ul>
+          <li>Traffic reduces (e.g. sale is over)</li>
+          <li>Remove extra servers</li>
+          <li>Tell LB you have fewer servers</li>
+          <li>Save money!</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>API Gateway & Microservices</h2>
+    </div>
+
+    <p>In a real app like Amazon, you don't have just one server. You have many separate services (called <strong>Microservices</strong>) — Auth, Orders, Payments, API, etc. Each service runs on its own servers.</p>
+
+    <p>Problem: How do you route <code style="background:var(--code-bg);padding:0.1rem 0.4rem;border-radius:4px;color:var(--accent2)">/auth</code> requests to Auth servers, <code style="background:var(--code-bg);padding:0.1rem 0.4rem;border-radius:4px;color:var(--accent2)">/orders</code> to Order servers, etc.?</p>
+
+    <h3>Answer: API Gateway</h3>
+
+    <div class="flow">
+      <div class="flow-title">🗺️ API Gateway Routes Traffic to the Right Service</div>
+      <pre style="color:var(--text);line-height:2.2">
+  User makes a request
+         |
+         ▼
+  ┌─────────────────┐
+  │   API Gateway   │  ← Single entry point
+  │  IP: 10.5.8.3   │    (Registered in DNS)
+  └─────────────────┘
+         |
+    ┌────┴────────────────┐
+    │ RULES:              │
+    │ /auth    → Auth LB  │
+    │ /orders  → Order LB │
+    │ /payment → Pay LB   │
+    └────┬────────────────┘
+         |
+  ┌──────┴──────────────────────────┐
+  |             |                   |
+  ▼             ▼                   ▼
+Auth LB      Order LB           Payment LB
+  |             |                   |
+Auth         Order              Payment
+Servers      Servers            Servers
+(×4)         (×3)               (×2)</pre>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>URL Path</th><th>Routes To</th><th>Why</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>/auth</td><td>Auth Service Load Balancer</td><td>Login/signup requests</td></tr>
+        <tr><td>/orders</td><td>Orders Service Load Balancer</td><td>Order management</td></tr>
+        <tr><td>/payments</td><td>Payments Service Load Balancer</td><td>Payment processing</td></tr>
+        <tr><td>/api</td><td>Main API Load Balancer</td><td>General API calls</td></tr>
+      </tbody>
+    </table>
+
+    <div class="keypoint">
+      <strong>API Gateway definition:</strong> It's the single entry point (like a reception desk). Every request comes here first, it checks the URL, and forwards the request to the right service. It can also do authentication — check if the user is logged in before forwarding.
+    </div>
+  </div>
+
+  <!-- SECTION 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>Queue Systems & Async Processing</h2>
+    </div>
+
+    <p>When a user makes a payment, you might want to send them an email. The <strong>wrong way</strong> is to have the Payment service directly call the Email service and wait — this is <strong>Synchronous</strong>.</p>
+
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>❌ Synchronous (Bad)</h4>
+        <ul>
+          <li>Payment calls Email service</li>
+          <li>Waits for email to be sent</li>
+          <li>If Gmail is slow, payment is slow</li>
+          <li>Not scalable</li>
+          <li>Tightly coupled</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>✅ Asynchronous (Good)</h4>
+        <ul>
+          <li>Payment drops message in Queue</li>
+          <li>Returns immediately (fast!)</li>
+          <li>Email Worker reads queue later</li>
+          <li>Highly scalable</li>
+          <li>Loosely coupled</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>How a Queue Works</h3>
+
+    <div class="flow">
+      <div class="flow-title">📬 Queue (SQS) — First In, First Out</div>
+      <pre style="color:var(--text);line-height:2">
+  Payment Service                Queue (SQS)         Email Worker
+       |                     ┌──────────────┐              |
+       │ Order #1 happened   │ [Order#1]    │              |
+       │────────────────────►│ [Order#2]    │              |
+       │ Order #2 happened   │ [Order#3]    │              |
+       │────────────────────►│ [Order#4]    │              |
+       │                     └──────────────┘              |
+       │                            |          pulls event  |
+       │                            │◄─────────────────────│
+       │                            │  sends email         |
+       │                            │─────────────────────►│
+       │                                                   |
+  Done! (no waiting)             Queue is                 Sends emails
+                                 decoupled                one by one</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>AWS SQS</strong> = Simple Queue Service. This is Amazon's managed queue. Workers can <strong>poll</strong> (ask) the queue for messages to process.
+    </div>
+
+    <h3>Pull vs Push</h3>
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>Pull (Polling)</h4>
+        <ul>
+          <li>Worker asks queue: "Any messages?"</li>
+          <li>Short poll: ask every 1 second</li>
+          <li>Long poll: wait 10 seconds for messages, then batch pull</li>
+          <li>SQS uses this method</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>Push</h4>
+        <ul>
+          <li>Queue calls/invokes your worker</li>
+          <li>Worker doesn't need to check</li>
+          <li>Queue pushes when event arrives</li>
+          <li>Used by some serverless setups</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="success">
+      <strong>Extra benefit — Rate Limiting with Gmail:</strong> If Gmail only allows 10 emails/second, configure your Email Worker to never pick more than 10 messages per second. The queue will hold the rest. No complaints from Gmail!
+    </div>
+  </div>
+
+  <!-- SECTION 8 -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>Pub/Sub & Fan-Out Architecture</h2>
+    </div>
+
+    <p>Queue (SQS) is <strong>1-to-1</strong>: one message → one consumer picks it. But what if ONE payment event should trigger FOUR things: WhatsApp, Email, SMS, and Vendor notification?</p>
+
+    <p>You need <strong>Pub/Sub (Publish-Subscribe)</strong>.</p>
+
+    <h3>SNS — Simple Notification Service</h3>
+
+    <div class="flow">
+      <div class="flow-title">📢 Pub/Sub with SNS</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Payment happens
+         |
+         ▼
+  ┌─────────────┐     "Payment done!"
+  │     SNS     │ ────────────────────────────────────┐
+  │ (Publisher) │                                     |
+  └─────────────┘                                     |
+         |                                            |
+    Broadcasts to ALL subscribers                     |
+    /            |            \                       |
+   ▼             ▼             ▼                      ▼
+Email Worker  WhatsApp      SMS Worker        Vendor Email
+(receives     Worker        (receives         Worker
+ it)          (receives      it)              (receives it)
+              it)</pre>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ Problem with pure SNS:</strong> There's no guarantee. If a subscriber was offline when you published, the message is gone! No retry, no acknowledgement.
+    </div>
+
+    <h3>Fan-Out Architecture = SNS + SQS combined</h3>
+
+    <div class="flow">
+      <div class="flow-title">⚡ Fan-Out: Best of Both Worlds</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Payment happens
+         |
+         ▼
+  ┌──────────┐
+  │   SNS    │ ← Publishes event once
+  └──────────┘
+         |
+   ┌─────┼──────┐
+   ▼     ▼      ▼
+  SQS   SQS    SQS   ← Each gets a copy
+  [WA]  [Email][SMS]
+   |      |     |
+   ▼      ▼     ▼
+  WA    Email   SMS  ← Each has its own workers
+  Worker Worker Worker ← Can retry independently!</pre>
+    </div>
+
+    <div class="success">
+      <strong>✅ Fan-Out benefits:</strong><br>
+      • Multiple services get notified (like SNS)<br>
+      • Each has its own queue, so retries work (like SQS)<br>
+      • If SMS fails, only SMS retries — WhatsApp and Email are fine!
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">📢</div>
+      <div class="analogy-text">
+        <strong>Real-world example:</strong> When you upload a YouTube video, one event fans out into: transcoding to 480p, 1080p, 4K, extracting audio, generating thumbnail, transcribing captions — all happening in parallel!
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Feature</th><th>SQS (Queue)</th><th>SNS (Pub/Sub)</th><th>Fan-Out (SNS+SQS)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Consumers</td><td>1 (only one picks)</td><td>Many (all get it)</td><td>Many (all get it)</td></tr>
+        <tr><td>Retry</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes (per queue)</td></tr>
+        <tr><td>Acknowledgement</td><td>✅ Yes</td><td>❌ No</td><td>✅ Yes</td></tr>
+        <tr><td>Use case</td><td>One task per event</td><td>Broadcast notification</td><td>Multiple tasks + reliability</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 9 -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2>Rate Limiting</h2>
+    </div>
+
+    <p>Users can overload your system with too many requests — or worse, hackers can launch a <strong>DDoS attack</strong>. Rate limiting says: "You can only send X requests per second. After that, you're blocked."</p>
+
+    <div class="keypoint">
+      <strong>Rate Limiting</strong> = Controlling how many requests are allowed in a given time period.<br>
+      If you exceed the limit, you get HTTP 429: <em>Too Many Requests</em>.
+    </div>
+
+    <h3>Common Rate Limiting Algorithms</h3>
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>Token Bucket</h4>
+        <ul>
+          <li>Bucket fills with tokens over time</li>
+          <li>Each request uses one token</li>
+          <li>No tokens = request blocked</li>
+          <li>Allows bursts of traffic</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>Leaky Bucket</h4>
+        <ul>
+          <li>Requests go into a "bucket"</li>
+          <li>Bucket "leaks" at a fixed rate</li>
+          <li>Overflow = requests dropped</li>
+          <li>Smooth, consistent output rate</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="warn">
+      <strong>Rate limiting isn't just for users.</strong> You also rate-limit internally — e.g. your Email Worker is rate-limited to 10/sec so you don't exceed Gmail's API limits.
+    </div>
+  </div>
+
+  <!-- SECTION 10 -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2>Database Scaling & Caching</h2>
+    </div>
+
+    <p>Your microservices all query the same database. As services grow, the DB gets overwhelmed. How do you scale it?</p>
+
+    <h3>Read Replicas</h3>
+
+    <div class="flow">
+      <div class="flow-title">📊 Primary + Read Replicas</div>
+      <pre style="color:var(--text);line-height:2">
+                    ┌──────────────────┐
+  ALL WRITES ──────►│ Primary DB Node  │
+  Real-time reads   │  (Master Node)   │
+                    └────────┬─────────┘
+                             │ Syncs data (slight delay)
+                    ┌────────▼─────────┐
+                    │   Read Replica   │ ← Analytics, Logs,
+                    │   (Copy of DB)   │   Non-real-time reads
+                    └──────────────────┘</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>Read Replica rule:</strong> Always write to Primary. For real-time reads, use Primary. For analytics/reports where slight delay is okay, use Read Replica — this reduces load on the Primary.
+    </div>
+
+    <h3>Caching with Redis</h3>
+
+    <div class="flow">
+      <div class="flow-title">⚡ Cache Logic — Check Cache Before DB</div>
+      <pre style="color:var(--text);line-height:2">
+  Request comes in for data
+         |
+         ▼
+  ┌──────────────┐
+  │  Redis Cache │ ◄── In-memory, super fast
+  │ (Check here  │
+  │   first)     │
+  └──────────────┘
+         |
+    ┌────┴────────────────────┐
+    │                         │
+  Cache HIT               Cache MISS
+  (data found)            (data not found)
+    │                         │
+    ▼                         ▼
+  Return data          Query Database
+  immediately          ↓
+  (fast!)              Store result in cache
+                       ↓
+                       Return data</pre>
+    </div>
+
+    <div class="success">
+      <strong>✅ Caching benefits:</strong> Fewer database queries → DB is under less load → faster responses → better user experience.
+    </div>
+  </div>
+
+  <!-- SECTION 11 -->
+  <div class="section" id="s11">
+    <div class="section-header">
+      <div class="section-num">11</div>
+      <h2>CDN — Content Delivery Network</h2>
+    </div>
+
+    <p>Your servers might be in the US. A user in North India making a request has to travel all the way to the US and back — slow! CDN solves this.</p>
+
+    <p><strong>CDN = Mini servers (Edge Servers) placed all around the world</strong>, caching your content close to users.</p>
+
+    <div class="flow">
+      <div class="flow-title">🌍 CDN Architecture (CloudFront)</div>
+      <pre style="color:var(--text);line-height:2">
+             ┌─────────────────────────────────┐
+             │        Your Main Server         │
+             │      (Load Balancer + App)      │
+             └────────────────┬────────────────┘
+                              │ (origin)
+          ┌───────────────────┼───────────────────┐
+          ▼                   ▼                   ▼
+  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+  │  CDN Edge    │  │  CDN Edge    │  │  CDN Edge    │
+  │  (US)        │  │  (N. India)  │  │  (Canada)    │
+  └──────────────┘  └──────────────┘  └──────────────┘
+         ▲                  ▲                 ▲
+         │                  │                 │
+   US users          India users         Canada users
+   get served        get served          get served
+   from nearby       from nearby         from nearby
+   edge              edge                edge</pre>
+    </div>
+
+    <h3>How CDN Caching Works</h3>
+    <p>First time someone in India loads a product photo → CDN edge in India doesn't have it → fetches from main server → <strong>caches it locally</strong>.<br>
+    Next time any India user requests that photo → served directly from the India edge. <strong>No trip to the US server!</strong></p>
+
+    <div class="keypoint">
+      <strong>Anycast IP:</strong> How do all CDN edges share one IP? Through <strong>Anycast</strong> — multiple machines are assigned the same IP, and you're automatically routed to the nearest one.
+    </div>
+
+    <div class="success">
+      <strong>CDN benefits:</strong><br>
+      ✅ Much lower latency (serve from nearby)<br>
+      ✅ Less load on your main server<br>
+      ✅ Better user experience globally<br>
+      AWS calls this: <strong>CloudFront</strong>
+    </div>
+  </div>
+
+  <!-- SECTION 12 -->
+  <div class="section" id="s12">
+    <div class="section-header">
+      <div class="section-num">12</div>
+      <h2>Full System — All Components Together</h2>
+    </div>
+
+    <p>Here's how everything fits together in a real production system like Amazon:</p>
+
+    <div class="final-flow">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>User types amazon.com</strong>
+          <span>DNS resolves domain → returns CDN (CloudFront) IP via Anycast</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>CDN Edge checks cache</strong>
+          <span>If static content (images, CSS) is cached → serve it directly. No server needed!</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Dynamic request → goes to API Gateway</strong>
+          <span>CDN forwards non-cached requests to the API Gateway (with rate limiting)</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <strong>API Gateway routes to correct service</strong>
+          <span>/auth → Auth Service LB, /orders → Orders Service LB, /payments → Payment LB</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <strong>Load Balancer distributes across server replicas</strong>
+          <span>Round-robin or other algorithms, health checks ensure only healthy servers receive traffic</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-content">
+          <strong>Server checks Redis cache first</strong>
+          <span>Cache hit → return fast. Cache miss → query Primary DB, store in cache, return</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">7</div>
+        <div class="step-content">
+          <strong>Background jobs via Queue (SQS)</strong>
+          <span>Events (payment, order) published to SQS → Email Worker, WhatsApp Worker etc. process async</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">8</div>
+        <div class="step-content">
+          <strong>Fan-Out for multiple notifications</strong>
+          <span>SNS publishes one event → fans out to multiple SQS queues → WhatsApp + Email + SMS all triggered</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">9</div>
+        <div class="step-content">
+          <strong>Auto-scaling based on traffic</strong>
+          <span>When traffic spikes (sale), new servers spin up. When traffic drops, servers removed. Only pay for usage.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Reference Table -->
+    <h3>📖 Quick Reference — All Components</h3>
+    <table>
+      <thead>
+        <tr><th>Component</th><th>What it does</th><th>AWS Name</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>DNS Server</td><td>Maps domain name → IP address</td><td>Route 53</td></tr>
+        <tr><td>CDN</td><td>Serves content from nearest location, caches static assets</td><td>CloudFront</td></tr>
+        <tr><td>API Gateway</td><td>Routes requests to correct microservice based on URL</td><td>API Gateway</td></tr>
+        <tr><td>Load Balancer</td><td>Distributes traffic among multiple server replicas</td><td>ELB (Elastic LB)</td></tr>
+        <tr><td>Server / VM</td><td>Runs your application code</td><td>EC2</td></tr>
+        <tr><td>Queue</td><td>Async communication between services (1-to-1)</td><td>SQS</td></tr>
+        <tr><td>Pub/Sub</td><td>Broadcast event to multiple subscribers (1-to-many)</td><td>SNS</td></tr>
+        <tr><td>Cache</td><td>In-memory store for fast repeated reads</td><td>ElastiCache (Redis)</td></tr>
+        <tr><td>Database Replica</td><td>Read copies of DB to reduce load on primary</td><td>RDS Read Replica</td></tr>
+        <tr><td>Rate Limiter</td><td>Limit requests per user/time to prevent abuse</td><td>API Gateway / WAF</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:0.85rem;">
+    📼 Video 1 of the System Design Playlist &nbsp;|&nbsp; More components (Docker, Kubernetes, Containers) coming in Video 2
+  </div>
+
+</div>
+</body>
+</html>

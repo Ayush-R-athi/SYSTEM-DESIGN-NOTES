@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design – CQRS Pattern Notes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #1e2130;
+    --border: #2d3148;
+    --accent: #5b8dee;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --orange: #fb923c;
+    --teal: #2dd4bf;
+    --pink: #f472b6;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --code-bg: #13161f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; padding: 2rem 1rem;
+  }
+  .container { max-width: 880px; margin: 0 auto; }
+
+  /* ── Header ── */
+  .header {
+    text-align: center; padding: 2.5rem 2rem;
+    background: linear-gradient(135deg, #1a1d27 0%, #1e2130 100%);
+    border: 1px solid var(--border); border-radius: 16px; margin-bottom: 2rem;
+    position: relative; overflow: hidden;
+  }
+  .header::before {
+    content:''; position:absolute; top:-60px; right:-60px;
+    width:200px; height:200px;
+    background: radial-gradient(circle, rgba(244,114,182,0.15) 0%, transparent 70%);
+    border-radius:50%;
+  }
+  .header .tag {
+    display:inline-block; background:rgba(244,114,182,0.15); color:var(--pink);
+    font-size:.75rem; font-weight:600; letter-spacing:.08em;
+    padding:.3rem .9rem; border-radius:20px; border:1px solid rgba(244,114,182,0.3);
+    margin-bottom:1rem; text-transform:uppercase;
+  }
+  .header h1 { font-size:2rem; font-weight:700; color:#fff; margin-bottom:.5rem; }
+  .header p  { color:var(--muted); font-size:.95rem; }
+
+  /* ── TOC ── */
+  .toc {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:1.5rem; margin-bottom:2rem;
+  }
+  .toc h2 { font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:1rem; }
+  .toc ol  { padding-left:1.4rem; }
+  .toc li  { margin-bottom:.4rem; }
+  .toc a   { color:var(--pink); text-decoration:none; font-size:.93rem; }
+  .toc a:hover { text-decoration:underline; }
+
+  /* ── Section ── */
+  .section {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:16px; padding:2rem; margin-bottom:1.5rem;
+  }
+  .section-header {
+    display:flex; align-items:center; gap:1rem;
+    margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border);
+  }
+  .section-num {
+    width:36px; height:36px;
+    background:linear-gradient(135deg, var(--pink), var(--accent2));
+    border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.9rem; color:#fff; flex-shrink:0;
+  }
+  .section h2 { font-size:1.25rem; font-weight:700; color:#fff; }
+  h3 { font-size:1rem; font-weight:600; color:#fff; margin:1.4rem 0 .7rem; }
+  p  { margin-bottom:1rem; color:var(--text); font-size:.96rem; }
+  p:last-child { margin-bottom:0; }
+  code {
+    background:var(--code-bg); padding:.1rem .4rem; border-radius:4px;
+    color:var(--pink); font-family:'JetBrains Mono',monospace; font-size:.88em;
+  }
+
+  /* ── Callouts ── */
+  .keypoint { background:rgba(244,114,182,.08); border-left:3px solid var(--pink);   border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .keypoint strong { color:var(--pink); }
+  .warn    { background:rgba(251,191,36,.08);  border-left:3px solid var(--yellow); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .warn strong { color:var(--yellow); }
+  .success { background:rgba(52,211,153,.08);  border-left:3px solid var(--green);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .success strong { color:var(--green); }
+  .danger  { background:rgba(248,113,113,.08); border-left:3px solid var(--red);    border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .danger  strong { color:var(--red); }
+  .info    { background:rgba(91,141,238,.08);  border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .info strong { color:var(--accent); }
+
+  /* ── Flow box ── */
+  .flow {
+    background:var(--code-bg); border:1px solid var(--border);
+    border-radius:12px; padding:1.5rem; margin:1.2rem 0;
+    font-family:'JetBrains Mono',monospace; font-size:.82rem; overflow-x:auto;
+  }
+  .flow-title { font-size:.75rem; color:var(--muted); font-family:'Inter',sans-serif; text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem; }
+
+  /* ── Compare grids ── */
+  .compare-grid   { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem; }
+  .compare-card h4 { font-size:.88rem; font-weight:600; margin-bottom:.8rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+  .compare-card.c-red    h4 { color:var(--red); }
+  .compare-card.c-green  h4 { color:var(--green); }
+  .compare-card.c-blue   h4 { color:var(--accent); }
+  .compare-card.c-purple h4 { color:var(--accent2); }
+  .compare-card.c-pink   h4 { color:var(--pink); }
+  .compare-card.c-teal   h4 { color:var(--teal); }
+  .compare-card ul { padding-left:1.2rem; }
+  .compare-card li { font-size:.88rem; color:var(--muted); margin-bottom:.35rem; }
+
+  /* ── Analogy ── */
+  .analogy {
+    background:var(--card2); border:1px solid var(--border);
+    border-radius:10px; padding:1rem 1.2rem; margin:1rem 0;
+    display:flex; gap:1rem; align-items:flex-start;
+  }
+  .analogy-icon { font-size:1.5rem; flex-shrink:0; }
+  .analogy-text { font-size:.9rem; }
+  .analogy-text strong { color:#fff; }
+
+  /* ── Table ── */
+  table { width:100%; border-collapse:collapse; margin:1.2rem 0; font-size:.88rem; }
+  th { background:var(--code-bg); color:var(--pink); padding:.7rem 1rem; text-align:left; font-weight:600; border-bottom:2px solid var(--border); }
+  td { padding:.65rem 1rem; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(255,255,255,.02); }
+
+  /* ── Architecture diagram using pure CSS ── */
+  .arch-box {
+    border-radius:10px; padding:.7rem 1.1rem; font-size:.82rem;
+    font-weight:600; text-align:center; border:1px solid;
+  }
+  .arch-user    { border-color:var(--yellow);  color:var(--yellow);  background:rgba(251,191,36,.1); }
+  .arch-gw      { border-color:var(--accent);  color:var(--accent);  background:rgba(91,141,238,.1); }
+  .arch-cmd     { border-color:var(--red);      color:var(--red);     background:rgba(248,113,113,.1); }
+  .arch-qry     { border-color:var(--green);    color:var(--green);   background:rgba(52,211,153,.1); }
+  .arch-kafka   { border-color:var(--orange);   color:var(--orange);  background:rgba(251,146,60,.1); }
+  .arch-wdb     { border-color:var(--red);      color:var(--red);     background:rgba(248,113,113,.08); }
+  .arch-rdb     { border-color:var(--green);    color:var(--green);   background:rgba(52,211,153,.08); }
+  .arch-lambda  { border-color:var(--accent2);  color:var(--accent2); background:rgba(167,139,250,.1); }
+  .arch-cdn     { border-color:var(--teal);     color:var(--teal);    background:rgba(45,212,191,.1); }
+  .arch-sns     { border-color:var(--pink);     color:var(--pink);    background:rgba(244,114,182,.1); }
+  .arch-sqs     { border-color:var(--pink);     color:var(--pink);    background:rgba(244,114,182,.08); }
+
+  .arch-row   { display:flex; align-items:center; justify-content:center; gap:.6rem; margin:.5rem 0; flex-wrap:wrap; }
+  .arch-arrow { color:var(--muted); font-size:1.1rem; flex-shrink:0; }
+  .arch-label { font-size:.7rem; color:var(--muted); text-align:center; margin-top:.2rem; }
+  .arch-col   { display:flex; flex-direction:column; gap:.5rem; }
+
+  /* ── Summary recap cards ── */
+  .recap-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .recap-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem; }
+  .recap-card .icon { font-size:1.6rem; margin-bottom:.5rem; }
+  .recap-card h4 { font-size:.9rem; font-weight:600; color:#fff; margin-bottom:.4rem; }
+  .recap-card p  { font-size:.83rem; color:var(--muted); margin:0; }
+
+  /* ── CQRS split visual ── */
+  .cqrs-split {
+    display:grid; grid-template-columns:1fr auto 1fr; gap:.5rem;
+    align-items:center; margin:1.5rem 0;
+  }
+  .cqrs-side {
+    background:var(--code-bg); border:1px solid var(--border);
+    border-radius:12px; padding:1.2rem;
+  }
+  .cqrs-side.cmd { border-color:var(--red);   }
+  .cqrs-side.qry { border-color:var(--green); }
+  .cqrs-side h4  { font-size:.9rem; font-weight:700; margin-bottom:.8rem; }
+  .cqrs-side.cmd h4 { color:var(--red);   }
+  .cqrs-side.qry h4 { color:var(--green); }
+  .cqrs-side ul  { padding-left:1.1rem; }
+  .cqrs-side li  { font-size:.83rem; color:var(--muted); margin-bottom:.3rem; }
+  .cqrs-mid { text-align:center; font-size:1.6rem; color:var(--muted); }
+
+  /* ── DB type comparison ── */
+  .db-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .db-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem; }
+  .db-card h4 { font-size:.88rem; font-weight:600; margin-bottom:.6rem; }
+  .db-card.write h4 { color:var(--red); }
+  .db-card.read  h4 { color:var(--green); }
+  .db-card p  { font-size:.84rem; color:var(--muted); margin:.3rem 0; }
+  .db-card .tag { display:inline-block; font-size:.72rem; padding:.15rem .5rem; border-radius:4px; margin:.15rem .15rem 0 0; font-weight:600; }
+  .db-card .t-red   { background:rgba(248,113,113,.15); color:var(--red);   border:1px solid rgba(248,113,113,.3); }
+  .db-card .t-green { background:rgba(52,211,153,.15);  color:var(--green); border:1px solid rgba(52,211,153,.3); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="tag">📓 Study Notes — Video 4</div>
+    <h1>CQRS — Command Query Responsibility Segregation</h1>
+    <p>Splitting reads and writes into separate models, databases, and services for ultimate scalability</p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 What's Inside</h2>
+    <ol>
+      <li><a href="#s1">What is CQRS? (The Big Idea)</a></li>
+      <li><a href="#s2">Traditional Architecture & Its Bottleneck</a></li>
+      <li><a href="#s3">CQRS: Splitting Commands & Queries</a></li>
+      <li><a href="#s4">Two Separate Databases — Write DB & Read DB</a></li>
+      <li><a href="#s5">Normalized vs De-normalized Data</a></li>
+      <li><a href="#s6">Eventual Consistency — The Trade-off</a></li>
+      <li><a href="#s7">CQRS + Event Sourcing Together</a></li>
+      <li><a href="#s8">Full AWS Architecture Walkthrough</a></li>
+      <li><a href="#s9">CDN Cache Invalidation (Bonus Optimization)</a></li>
+      <li><a href="#s10">When to Use CQRS & Full Summary</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>What is CQRS? (The Big Idea)</h2>
+    </div>
+
+    <p><strong>CQRS</strong> stands for <strong>Command Query Responsibility Segregation</strong>. It's a system design pattern that separates the "write" and "read" parts of your application into completely independent systems.</p>
+
+    <div class="keypoint">
+      <strong>CQRS in one line:</strong> Don't use the same code, same server, or same database for reading data and writing data. Split them completely.
+    </div>
+
+    <p>CRUD has four operations: <strong>C</strong>reate, <strong>R</strong>ead, <strong>U</strong>pdate, <strong>D</strong>elete. CQRS splits these into two groups:</p>
+
+    <div class="cqrs-split">
+      <div class="cqrs-side cmd">
+        <h4>⚡ Command Side (C, U, D)</h4>
+        <ul>
+          <li>Create a product</li>
+          <li>Update a price</li>
+          <li>Delete an order</li>
+          <li>Any action that <em>mutates</em> data</li>
+          <li>Think: "Do something"</li>
+        </ul>
+      </div>
+      <div class="cqrs-mid">↔</div>
+      <div class="cqrs-side qry">
+        <h4>🔍 Query Side (R)</h4>
+        <ul>
+          <li>Get product details</li>
+          <li>List all orders</li>
+          <li>Search by category</li>
+          <li>Any action that only <em>reads</em> data</li>
+          <li>Think: "Ask a question"</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ Disclaimer from the video:</strong> CQRS is NOT for small apps. It adds a lot of complexity. Only use it when you genuinely have a scaling problem that simpler approaches can't solve. Large-scale companies like Amazon, Netflix, and Uber use it — not your hobby project.
+    </div>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>Traditional Architecture & Its Bottleneck</h2>
+    </div>
+
+    <p>In a standard app, every request — whether it's a GET, POST, PUT, or DELETE — hits the same server, same controller, and same database. This works fine at small scale, but creates a serious problem at Amazon-level traffic.</p>
+
+    <div class="flow">
+      <div class="flow-title">📦 Traditional Architecture (All in One)</div>
+      <pre style="color:var(--text);line-height:2">
+  User
+   │
+   ▼
+  REST API (Django / Express / FastAPI)
+   │
+   ├── GET /products   → Controller → READ  from PostgreSQL DB
+   ├── POST /products  → Controller → INSERT into PostgreSQL DB
+   ├── PATCH /products → Controller → UPDATE in  PostgreSQL DB
+   └── DELETE /product → Controller → DELETE from PostgreSQL DB
+
+  All operations → ONE database ← bottleneck!</pre>
+    </div>
+
+    <h3>The Locking Problem (at Amazon Scale)</h3>
+
+    <p>Imagine earphones are listed on Amazon for $50. Thousands of users are reading the price simultaneously. Meanwhile, the seller wants to run a sale and update the price to $30.</p>
+
+    <div class="flow">
+      <div class="flow-title">🔒 Database Lock Conflict</div>
+      <pre style="color:var(--text);line-height:2">
+  1000 users: "GET /products/earphones" → trying to READ price
+                                           │
+  Seller:     "PATCH /products/earphones" → trying to UPDATE price
+                                           │
+                                           ▼
+                             UPDATE acquires a LOCK on the row
+                                           │
+                             All 1000 reads must WAIT until
+                             the lock is released!
+                                           │
+                                           ▼
+                           At Amazon scale (millions of users):
+                           DB becomes a total BOTTLENECK 💥</pre>
+    </div>
+
+    <div class="danger">
+      <strong>❌ The core issue:</strong> Reads and writes are competing for the same database row at the same time. Updates acquire row-level locks. While a row is locked for writing, no one can read it. At massive scale, this creates extreme slowness or crashes.
+    </div>
+  </div>
+
+  <!-- SECTION 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>CQRS: Splitting Commands & Queries</h2>
+    </div>
+
+    <p>CQRS solves this by routing requests to completely different servers based on the HTTP method. The <strong>API Gateway</strong> is the traffic cop.</p>
+
+    <div class="flow">
+      <div class="flow-title">🚦 API Gateway Routing Rule in CQRS</div>
+      <pre style="color:var(--text);line-height:2.2">
+           All users hit ONE API Gateway
+                     │
+           ┌─────────┴──────────┐
+           │   Routing Rule:    │
+           │  GET → Query Side  │
+           │  POST  ┐           │
+           │  PUT   ├→ Command  │
+           │  PATCH │   Side    │
+           │  DELETE┘           │
+           └─────────┬──────────┘
+                     │
+       ┌─────────────┴─────────────┐
+       ▼                           ▼
+  ┌──────────────┐         ┌──────────────────┐
+  │  COMMAND LB  │         │    QUERY LB      │
+  │  (Writes)    │         │   (Reads only)   │
+  └──────────────┘         └──────────────────┘
+       │                           │
+  Command Servers            Query Servers
+  (validate, auth,           (just read &
+   execute writes)            return data fast)</pre>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>⚡ Command Side</h4>
+        <ul>
+          <li>Handles: POST, PUT, PATCH, DELETE</li>
+          <li>Validates the incoming data</li>
+          <li>Authorizes: "Are you allowed to do this?"</li>
+          <li>Generates a Command object</li>
+          <li>Writes to the Write Database</li>
+          <li>Emits an event after writing</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>🔍 Query Side</h4>
+        <ul>
+          <li>Handles: GET only</li>
+          <li>No write logic at all</li>
+          <li>No locking issues</li>
+          <li>Reads from Read Database</li>
+          <li>Data is pre-joined and ready</li>
+          <li>Optimized purely for fast reads</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>Key idea — Everything on the Command side is a "Command":</strong><br>
+      Instead of "controller runs SQL UPDATE", you generate a structured Command object like <code>ProductUpdateCommand { id: 1, price: 30 }</code> and pass it to the Write Model. This makes the intent explicit and traceable.
+    </div>
+  </div>
+
+  <!-- SECTION 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>Two Separate Databases — Write DB & Read DB</h2>
+    </div>
+
+    <p>This is the most important part of CQRS. You have <strong>two completely separate databases</strong>: one optimized for writing, one optimized for reading.</p>
+
+    <div class="db-grid">
+      <div class="db-card write">
+        <h4>✍️ Write Database (Source of Truth)</h4>
+        <p>Stores data in a <strong>normalized</strong> way — multiple tables with foreign keys, no duplication. Data integrity is the top priority.</p>
+        <p><strong>Best DB type:</strong></p>
+        <span class="tag t-red">PostgreSQL</span>
+        <span class="tag t-red">MySQL</span>
+        <span class="tag t-red">ClickHouse (for logs)</span>
+        <p style="margin-top:.6rem"><strong>Why SQL?</strong> Transactions, ACID guarantees, data integrity. You want the write side to be rock solid.</p>
+      </div>
+      <div class="db-card read">
+        <h4>📖 Read Database (Optimized for Speed)</h4>
+        <p>Stores data in a <strong>de-normalized</strong> way — all the data pre-joined into one big document. No JOINs needed at query time.</p>
+        <p><strong>Best DB type:</strong></p>
+        <span class="tag t-green">MongoDB</span>
+        <span class="tag t-green">DynamoDB</span>
+        <span class="tag t-green">Elasticsearch</span>
+        <p style="margin-top:.6rem"><strong>Why NoSQL?</strong> Fast single-document lookups, no JOINs, easy to scale horizontally.</p>
+      </div>
+    </div>
+
+    <h3>How Are They Kept in Sync?</h3>
+
+    <div class="flow">
+      <div class="flow-title">🔄 Sync Flow: Write DB → Event → Read DB</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Command comes in (e.g. price updated to $30)
+           │
+           ▼
+  Write DB updated (PostgreSQL)
+           │
+           │ Emits an event: "PRODUCT_PRICE_UPDATED"
+           ▼
+     Message Queue (SNS/SQS or Kafka)
+           │
+           ▼
+  Event Consumer (Lambda function)
+           │
+     Reads the event, rebuilds the product document
+           ▼
+  Read DB updated (DynamoDB / MongoDB)
+  with pre-joined, de-normalized data
+           │
+           ▼
+  Next read request → served instantly from Read DB ✅</pre>
+    </div>
+
+    <div class="success">
+      <strong>✅ Result:</strong><br>
+      • Writes go to Write DB → no read locks on Read DB<br>
+      • Reads go to Read DB → no write locks from Write DB<br>
+      • Both databases can be scaled independently<br>
+      • Read DB can use a completely different (faster) DB technology
+    </div>
+  </div>
+
+  <!-- SECTION 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>Normalized vs De-normalized Data</h2>
+    </div>
+
+    <p>This is the key to why the Read DB is so fast. Let's understand the difference.</p>
+
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>📊 Normalized (Write DB — PostgreSQL)</h4>
+        <ul>
+          <li>Data split into many tables</li>
+          <li>No duplication</li>
+          <li>Use foreign keys to link tables</li>
+          <li>Need JOIN queries to combine data</li>
+          <li>JOINs are expensive at scale</li>
+          <li>Good for integrity; bad for read speed</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>📦 De-normalized (Read DB — MongoDB)</h4>
+        <ul>
+          <li>Data combined into one big document</li>
+          <li>Some duplication is OK</li>
+          <li>No foreign keys needed</li>
+          <li>No JOINs needed at query time</li>
+          <li>Single lookup by ID = full data</li>
+          <li>Perfect for fast reads</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Example — Product Lookup</h3>
+    <div class="flow">
+      <div class="flow-title">📋 Normalized (Write DB) — requires multiple JOINs</div>
+      <pre style="color:var(--text);line-height:2">
+  products table:    { id: 1, slug: "earphones" }
+  product_details:   { product_id: 1, price: 30, brand: "Sony" }
+  product_stock:     { product_id: 1, available: 50 }
+  product_orders:    { product_id: 1, total_sold: 200 }
+
+  To get full product info:
+  SELECT * FROM products
+  JOIN product_details ON products.id = product_details.product_id
+  JOIN product_stock   ON products.id = product_stock.product_id
+  JOIN product_orders  ON products.id = product_orders.product_id
+  WHERE products.id = 1
+  → Multiple table scans, slow at scale 🐢</pre>
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">📦 De-normalized (Read DB) — single document lookup</div>
+      <pre style="color:var(--text);line-height:2">
+  MongoDB document for product id:1 {
+    "id": 1,
+    "slug": "earphones",
+    "price": 30,
+    "brand": "Sony",
+    "stock": 50,
+    "total_sold": 200
+  }
+
+  To get full product info:
+  db.products.findOne({ id: 1 })
+  → ONE lookup, everything is already there 🚀</pre>
+    </div>
+
+    <div class="success">
+      <strong>✅ Bonus safety net:</strong> If the Read DB ever gets corrupted or goes stale, you can always <em>regenerate it</em> entirely from the Write DB or event log. The Read DB is just a projection of the truth — the truth lives in the Write DB / event log.
+    </div>
+  </div>
+
+  <!-- SECTION 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>Eventual Consistency — The Main Trade-off</h2>
+    </div>
+
+    <p>There's a catch. Because Write DB and Read DB are separate and synced via an event/queue, there's a <strong>small delay</strong> between a write happening and the read side reflecting it.</p>
+
+    <div class="flow">
+      <div class="flow-title">⏱️ Timeline of a Write in CQRS</div>
+      <pre style="color:var(--text);line-height:2">
+  T=0ms   Seller updates price from $50 → $30 (Write DB updated)
+  T=10ms  Event emitted to message queue
+  T=20ms  Lambda picks up the event
+  T=50ms  Read DB updated to $30
+
+  T=25ms  (another user reads price) → sees $50 ← old data!
+  T=51ms  (another user reads price) → sees $30 ← updated ✅</pre>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ Eventual Consistency:</strong> The Read DB will <em>eventually</em> have the correct data — but there's a window (milliseconds to seconds) where it might show stale data. This is the trade-off you accept with CQRS.
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-green">
+        <h4>✅ Eventual Consistency OK for:</h4>
+        <ul>
+          <li>E-commerce product prices</li>
+          <li>Social media posts/feeds</li>
+          <li>News articles, content sites</li>
+          <li>Analytics dashboards</li>
+          <li>Most read-heavy applications</li>
+        </ul>
+      </div>
+      <div class="compare-card c-red">
+        <h4>❌ Eventual Consistency NOT OK for:</h4>
+        <ul>
+          <li>Stock market prices (real-time)</li>
+          <li>Bank balances (must be exact)</li>
+          <li>Medical records</li>
+          <li>Inventory (if overselling is catastrophic)</li>
+          <li>Any "must be consistent NOW" scenario</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>The honest trade-off:</strong><br>
+      Option A: Keep one DB, stay consistent — but DB crashes under load at Amazon scale.<br>
+      Option B: Use CQRS, tolerate small delay — but stay scalable, fault-tolerant, and alive.<br><br>
+      Most large-scale companies choose Option B.
+    </div>
+  </div>
+
+  <!-- SECTION 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>CQRS + Event Sourcing Together (Natural Fit)</h2>
+    </div>
+
+    <p>Remember Event Sourcing from Video 3? CQRS and Event Sourcing are like peanut butter and jelly — they naturally fit together.</p>
+
+    <div class="keypoint">
+      <strong>How they combine:</strong> Instead of writing the final state to the Write DB, you write <em>events (logs)</em> to an append-only log (Kafka). The Read DB is then populated by replaying those events via Hydration.
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">🔗 CQRS + Event Sourcing Combined</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Without Event Sourcing:
+  Command → Write DB stores final state
+         → Event emitted → Read DB updated
+
+  With Event Sourcing:
+  Command → Kafka (Append-Only Log) stores every event
+         → Consumer reads log → Hydration
+         → Read DB built from replayed events</pre>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>Write DB (Event Sourcing style)</h4>
+        <ul>
+          <li>Stores ALL events/commands as logs</li>
+          <li>Append-only — never updates, never deletes</li>
+          <li>Uses Kafka / ClickHouse / event store</li>
+          <li>Source of absolute truth</li>
+          <li>Full history forever</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>Read DB (Projection)</h4>
+        <ul>
+          <li>Built by replaying events</li>
+          <li>Stores de-normalized, query-ready data</li>
+          <li>Uses DynamoDB / MongoDB</li>
+          <li>Can be fully regenerated if corrupted</li>
+          <li>Just a projection — not the truth</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="success">
+      <strong>✅ Superpower of combining CQRS + Event Sourcing:</strong><br>
+      If your Read DB ever gets corrupted or you want to switch DB technology (say MongoDB → DynamoDB), you just <em>replay all events</em> and regenerate the entire Read DB from scratch. Zero data loss. No migration scripts. The event log is the master record.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🏦</div>
+      <div class="analogy-text">
+        <strong>Think of it like a bank:</strong><br>
+        Write DB = the ledger of every transaction ever made (event log)<br>
+        Read DB = the account balance displayed on your app (projection)<br><br>
+        The balance on your screen is computed from the ledger. If the screen shows the wrong number, you don't fix the screen — you replay the ledger.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 8 -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>Full AWS Architecture Walkthrough</h2>
+    </div>
+
+    <p>Let's put everything together in a real AWS setup. Here's the complete CQRS + Event Sourcing architecture the video walks through:</p>
+
+    <!-- Full diagram using divs -->
+    <div class="flow">
+      <div class="flow-title">🏗️ Full CQRS + Event Sourcing Architecture on AWS</div>
+      <pre style="color:var(--text);line-height:2.3">
+         ┌────────────────────────────────────────────┐
+         │              User (Browser / App)           │
+         └─────────────────────┬──────────────────────┘
+                               │ All requests
+                               ▼
+         ┌────────────────────────────────────────────┐
+         │     CloudFront (CDN) — caches GET requests  │
+         └──────────────┬──────────────────────────────┘
+                        │ Cache MISS or non-GET
+                        ▼
+         ┌────────────────────────────────────────────┐
+         │              API Gateway                    │
+         │   Rule: GET → Query LB                     │
+         │   Rule: POST/PUT/PATCH/DELETE → Command LB │
+         └──────────┬──────────────────────┬──────────┘
+                    │                      │
+         ┌──────────▼──────┐    ┌──────────▼──────────┐
+         │  COMMAND LB     │    │     QUERY LB         │
+         │  (ELB)          │    │     (ELB)            │
+         └──────────┬──────┘    └──────────┬───────────┘
+                    │                      │
+         ┌──────────▼──────┐    ┌──────────▼───────────┐
+         │ Command Handlers│    │  Query Handlers       │
+         │ (EC2 fleet)     │    │  (EC2 fleet ×4)      │
+         │ • Validate      │    │  • Read from Read DB  │
+         │ • Authorize     │    │  • Return JSON fast   │
+         │ • Generate Cmd  │    └──────────┬────────────┘
+         └──────────┬──────┘              │
+                    │                     │
+         ┌──────────▼──────┐   ┌──────────▼────────────┐
+         │  Kafka /        │   │  READ DB (DynamoDB)    │
+         │  Kinesis Stream │   │  De-normalized JSON    │
+         │  (Append-Only   │   │  Ready for instant     │
+         │   Event Log)    │   │  single-doc lookups    │
+         └──────┬──────────┘   └───────────────────────┘
+                │                          ▲
+                │ Events consumed          │ Lambda updates
+                ▼                         │
+         ┌────────────────┐    ┌─────────┴──────────────┐
+         │  WRITE DB      │    │     SNS (Fan-Out)       │
+         │  (ClickHouse)  │    │  ┌── SQS: Update ReadDB│
+         │  All logs      │    │  └── SQS: Email Queue  │
+         │  stored here   │    └────────────────────────┘
+         └────────────────┘</pre>
+    </div>
+
+    <h3>Step-by-Step Flow (Write path)</h3>
+
+    <table>
+      <thead>
+        <tr><th>Step</th><th>What Happens</th><th>AWS Service</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>User sends PATCH request (update price)</td><td>User/Browser</td></tr>
+        <tr><td>2</td><td>CloudFront passes non-cached request through</td><td>CloudFront</td></tr>
+        <tr><td>3</td><td>API Gateway sees PATCH → routes to Command LB</td><td>API Gateway</td></tr>
+        <tr><td>4</td><td>Command Handler validates data, checks authorization</td><td>EC2 (Command Service)</td></tr>
+        <tr><td>5</td><td>Command written to append-only event log</td><td>Kinesis / Kafka</td></tr>
+        <tr><td>6</td><td>All events stored as logs in Write DB</td><td>ClickHouse / DynamoDB</td></tr>
+        <tr><td>7</td><td>Event published: "PRODUCT_UPDATED"</td><td>SNS</td></tr>
+        <tr><td>8</td><td>SNS fans out to multiple SQS queues</td><td>SNS → SQS</td></tr>
+        <tr><td>9</td><td>Lambda reads "Update Read DB" queue, rebuilds document</td><td>Lambda</td></tr>
+        <tr><td>10</td><td>Read DB (DynamoDB) updated with de-normalized data</td><td>DynamoDB</td></tr>
+        <tr><td>11</td><td>Lambda also invalidates CDN cache for this product</td><td>Lambda → CloudFront</td></tr>
+        <tr><td>12</td><td>Email Lambda triggers promotional email if price dropped</td><td>Lambda → SES</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Step-by-Step Flow (Read path)</h3>
+
+    <table>
+      <thead>
+        <tr><th>Step</th><th>What Happens</th><th>AWS Service</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>User sends GET request (view product)</td><td>User/Browser</td></tr>
+        <tr><td>2</td><td>CloudFront checks cache — if hit, returns immediately</td><td>CloudFront</td></tr>
+        <tr><td>3</td><td>Cache miss → API Gateway routes GET to Query LB</td><td>API Gateway</td></tr>
+        <tr><td>4</td><td>Query Handler reads from Read DB (single fast lookup)</td><td>EC2 (Query Service)</td></tr>
+        <tr><td>5</td><td>Returns de-normalized product JSON instantly</td><td>DynamoDB / MongoDB</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 9 -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2>CDN Cache Invalidation (Bonus Optimization)</h2>
+    </div>
+
+    <p>On top of CQRS, you can add a CDN like <strong>CloudFront</strong> to cache GET responses at the edge — so repeat reads don't even hit your Query servers.</p>
+
+    <div class="flow">
+      <div class="flow-title">🌐 CDN + Cache Invalidation Flow</div>
+      <pre style="color:var(--text);line-height:2.2">
+  First GET for product id:1
+       │
+       ▼ CloudFront (cache MISS)
+       │
+       ▼ Query Server → DynamoDB → returns data
+       │
+       ▼ CloudFront caches the response
+
+  Next 1000 GETs for product id:1
+       │
+       ▼ CloudFront serves from cache ← no server hit!
+
+  Now seller updates the price:
+       │
+       ▼ Command path runs (Write DB + Read DB updated)
+       │
+       ▼ Lambda also triggers cache invalidation:
+         "invalidate /products/1 from CloudFront"
+       │
+       ▼ Next GET → CloudFront cache is empty → fresh fetch
+       ▼ New cached response stored with updated price ✅</pre>
+    </div>
+
+    <div class="success">
+      <strong>✅ Why this is powerful:</strong> 99% of reads can be served from CloudFront edge servers near the user — zero database hits, zero server hits, near-zero latency. Only when data actually changes does the cache get cleared and refreshed.
+    </div>
+  </div>
+
+  <!-- SECTION 10 -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2>When to Use CQRS & Full Summary</h2>
+    </div>
+
+    <h3>✅ Use CQRS When...</h3>
+    <div class="compare-grid">
+      <div class="compare-card c-green">
+        <h4>Good Fit</h4>
+        <ul>
+          <li>Read and write traffic scales very differently (e.g. 1000× more reads than writes)</li>
+          <li>You want different DB technologies for reads vs writes</li>
+          <li>You need to JOIN data from multiple microservices for reads</li>
+          <li>Eventual consistency is acceptable in your domain</li>
+          <li>You're building at Amazon / Netflix / Uber scale</li>
+          <li>You want a full audit trail (pair with Event Sourcing)</li>
+        </ul>
+      </div>
+      <div class="compare-card c-red">
+        <h4>❌ Bad Fit</h4>
+        <ul>
+          <li>Small or medium-sized applications</li>
+          <li>You need real-time strong consistency (stock market, banking)</li>
+          <li>Your team is small and can't manage the complexity</li>
+          <li>Your read and write traffic are similar in volume</li>
+          <li>You're just starting out / building an MVP</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Full Concept Summary</h3>
+    <div class="recap-grid">
+      <div class="recap-card">
+        <div class="icon">⚡</div>
+        <h4>Command</h4>
+        <p>Any action that changes data — create, update, delete. Represented as a structured Command object, not a direct SQL query.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🔍</div>
+        <h4>Query</h4>
+        <p>Any action that only reads data. Completely isolated from writes. Can use a totally different, read-optimized database.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">✍️</div>
+        <h4>Write DB (Normalized)</h4>
+        <p>The source of truth. Data is split across multiple tables with foreign keys. SQL databases like PostgreSQL work well here.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📖</div>
+        <h4>Read DB (De-normalized)</h4>
+        <p>A projection of the Write DB, pre-joined for fast reads. No JOINs at query time. NoSQL like DynamoDB/MongoDB works well here.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">⏳</div>
+        <h4>Eventual Consistency</h4>
+        <p>A small delay exists between writing and the read side reflecting it. Usually milliseconds. Acceptable for most (not all) apps.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🔗</div>
+        <h4>CQRS + Event Sourcing</h4>
+        <p>Instead of writing final state to Write DB, write events to an append-only log. Read DB is built by replaying those events.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📢</div>
+        <h4>Fan-Out (SNS + SQS)</h4>
+        <p>After a write, SNS publishes the event. Multiple SQS queues fan out to different consumers: one updates Read DB, one sends emails, etc.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🔄</div>
+        <h4>Read DB Regeneration</h4>
+        <p>If Read DB gets corrupted or you want to switch technologies, replay all events from the Write DB/event log to regenerate it completely.</p>
+      </div>
+    </div>
+
+    <h3>Quick Reference — Everything Together</h3>
+    <table>
+      <thead>
+        <tr><th>Component</th><th>Purpose</th><th>AWS Service</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>API Gateway</td><td>Routes GET → Query side, mutations → Command side</td><td>AWS API Gateway</td></tr>
+        <tr><td>Command Load Balancer</td><td>Distributes write requests across Command servers</td><td>ELB</td></tr>
+        <tr><td>Command Handlers</td><td>Validate, authorize, generate commands</td><td>EC2</td></tr>
+        <tr><td>Append-Only Log</td><td>Stores every event/command forever (Write DB in ES style)</td><td>Kinesis / Kafka</td></tr>
+        <tr><td>Write DB</td><td>Normalized source of truth (if not using ES)</td><td>RDS PostgreSQL / ClickHouse</td></tr>
+        <tr><td>SNS</td><td>Publishes "something changed" event to all subscribers</td><td>SNS</td></tr>
+        <tr><td>SQS (Update Read DB)</td><td>Queue for updating the Read DB after a write</td><td>SQS</td></tr>
+        <tr><td>SQS (Email Queue)</td><td>Queue for sending emails (e.g. price drop alerts)</td><td>SQS</td></tr>
+        <tr><td>Lambda</td><td>Reads queue, updates Read DB, invalidates cache, sends emails</td><td>AWS Lambda</td></tr>
+        <tr><td>Read DB</td><td>De-normalized, pre-joined data for fast reads</td><td>DynamoDB / MongoDB</td></tr>
+        <tr><td>Query Load Balancer</td><td>Distributes read requests across Query servers</td><td>ELB</td></tr>
+        <tr><td>Query Handlers</td><td>Just read from Read DB and return data</td><td>EC2</td></tr>
+        <tr><td>CDN</td><td>Caches GET responses at the edge; invalidated on writes</td><td>CloudFront</td></tr>
+      </tbody>
+    </table>
+
+    <div class="info">
+      <strong>📌 Remember:</strong> CQRS doesn't have to be all-or-nothing. You can start with a single DB and split only the most high-traffic read paths first. Evolve incrementally as your scale demands it.
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:.85rem;">
+    📼 Video 4 of the System Design Playlist &nbsp;|&nbsp;
+    Builds on: Part 1 (LB, CDN, API GW) · Part 2 (Scaling, Docker, K8s) · Part 3 (Event Sourcing)
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design – Event Sourcing Notes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #1e2130;
+    --border: #2d3148;
+    --accent: #5b8dee;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --orange: #fb923c;
+    --teal: #2dd4bf;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --code-bg: #13161f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 860px; margin: 0 auto; }
+
+  .header {
+    text-align: center;
+    padding: 2.5rem 2rem;
+    background: linear-gradient(135deg, #1a1d27 0%, #1e2130 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute; top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(45,212,191,0.15) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .header .tag {
+    display: inline-block;
+    background: rgba(45,212,191,0.15);
+    color: var(--teal);
+    font-size: 0.75rem; font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 20px;
+    border: 1px solid rgba(45,212,191,0.3);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+  }
+  .header h1 { font-size: 2rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem; }
+  .header p { color: var(--muted); font-size: 0.95rem; }
+
+  .toc {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem;
+  }
+  .toc h2 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
+  .toc ol { padding-left: 1.4rem; }
+  .toc li { margin-bottom: 0.4rem; }
+  .toc a { color: var(--teal); text-decoration: none; font-size: 0.93rem; }
+  .toc a:hover { text-decoration: underline; }
+
+  .section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem;
+  }
+  .section-header {
+    display: flex; align-items: center; gap: 1rem;
+    margin-bottom: 1.5rem; padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-num {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--teal), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.9rem; color: #fff; flex-shrink: 0;
+  }
+  .section h2 { font-size: 1.25rem; font-weight: 700; color: #fff; }
+
+  p { margin-bottom: 1rem; color: var(--text); font-size: 0.96rem; }
+  p:last-child { margin-bottom: 0; }
+
+  h3 { font-size: 1rem; font-weight: 600; color: #fff; margin: 1.4rem 0 0.7rem; }
+
+  .keypoint {
+    background: rgba(45,212,191,0.08);
+    border-left: 3px solid var(--teal);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem; margin: 1.2rem 0; font-size: 0.93rem;
+  }
+  .keypoint strong { color: var(--teal); }
+
+  .warn {
+    background: rgba(251,191,36,0.08);
+    border-left: 3px solid var(--yellow);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem; margin: 1.2rem 0; font-size: 0.93rem;
+  }
+  .warn strong { color: var(--yellow); }
+
+  .success {
+    background: rgba(52,211,153,0.08);
+    border-left: 3px solid var(--green);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem; margin: 1.2rem 0; font-size: 0.93rem;
+  }
+  .success strong { color: var(--green); }
+
+  .danger {
+    background: rgba(248,113,113,0.08);
+    border-left: 3px solid var(--red);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem; margin: 1.2rem 0; font-size: 0.93rem;
+  }
+  .danger strong { color: var(--red); }
+
+  .flow {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem; margin: 1.2rem 0;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; overflow-x: auto;
+  }
+  .flow-title {
+    font-size: 0.75rem; color: var(--muted); font-family: 'Inter', sans-serif;
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem;
+  }
+
+  .compare-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.2rem 0;
+  }
+  .compare-card {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.2rem;
+  }
+  .compare-card h4 {
+    font-size: 0.88rem; font-weight: 600; margin-bottom: 0.8rem;
+    padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+  }
+  .compare-card.vs-a h4 { color: var(--red); }
+  .compare-card.vs-b h4 { color: var(--teal); }
+  .compare-card ul { padding-left: 1.2rem; }
+  .compare-card li { font-size: 0.88rem; color: var(--muted); margin-bottom: 0.35rem; }
+
+  .analogy {
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.2rem; margin: 1rem 0;
+    display: flex; gap: 1rem; align-items: flex-start;
+  }
+  .analogy-icon { font-size: 1.5rem; flex-shrink: 0; }
+  .analogy-text { font-size: 0.9rem; }
+  .analogy-text strong { color: #fff; }
+
+  table { width: 100%; border-collapse: collapse; margin: 1.2rem 0; font-size: 0.88rem; }
+  th { background: var(--code-bg); color: var(--teal); padding: 0.7rem 1rem; text-align: left; font-weight: 600; border-bottom: 2px solid var(--border); }
+  td { padding: 0.65rem 1rem; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  code {
+    background: var(--code-bg); padding: 0.1rem 0.4rem;
+    border-radius: 4px; color: var(--teal);
+    font-family: 'JetBrains Mono', monospace; font-size: 0.88em;
+  }
+
+  /* Event log visual */
+  .event-log {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem; margin: 1.2rem 0;
+  }
+  .event-log-title {
+    font-size: 0.75rem; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.06em; margin-bottom: 1rem;
+  }
+  .event-entry {
+    display: flex; align-items: flex-start; gap: 0.8rem;
+    margin-bottom: 0.7rem; padding-bottom: 0.7rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .event-entry:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+  .event-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    margin-top: 0.35rem;
+  }
+  .dot-blue { background: var(--accent); }
+  .dot-yellow { background: var(--yellow); }
+  .dot-green { background: var(--green); }
+  .dot-red { background: var(--red); }
+  .dot-teal { background: var(--teal); }
+  .event-info { flex: 1; }
+  .event-name { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #fff; font-weight: 600; }
+  .event-meta { font-size: 0.78rem; color: var(--muted); margin-top: 0.15rem; }
+
+  /* Concept pill boxes */
+  .pill-row {
+    display: flex; flex-wrap: wrap; gap: 0.7rem; margin: 1rem 0;
+  }
+  .pill {
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+  }
+  .pill strong { color: var(--teal); font-size: 0.8rem; display: block; margin-bottom: 0.15rem; }
+  .pill span { color: var(--muted); font-size: 0.8rem; }
+
+  /* Summary cards */
+  .summary-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.2rem 0;
+  }
+  .summary-card {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.2rem;
+  }
+  .summary-card .icon { font-size: 1.6rem; margin-bottom: 0.5rem; }
+  .summary-card h4 { font-size: 0.9rem; font-weight: 600; color: #fff; margin-bottom: 0.4rem; }
+  .summary-card p { font-size: 0.83rem; color: var(--muted); margin: 0; }
+
+  /* bank example step */
+  .bank-step {
+    display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.6rem;
+  }
+  .bank-badge {
+    padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.75rem;
+    font-weight: 700; font-family: 'JetBrains Mono', monospace; flex-shrink: 0;
+  }
+  .bank-dep { background: rgba(52,211,153,0.15); color: var(--green); border: 1px solid rgba(52,211,153,0.3); }
+  .bank-with { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .bank-bal { background: rgba(91,141,238,0.15); color: var(--accent); border: 1px solid rgba(91,141,238,0.3); font-size: 0.82rem; }
+  .bank-text { font-size: 0.88rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="tag">📓 Study Notes — Video 3</div>
+    <h1>System Design — Event Sourcing</h1>
+    <p>What events are, why traditional updates break, and how Event Sourcing fixes everything</p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 What's Inside</h2>
+    <ol>
+      <li><a href="#s1">What is an Event?</a></li>
+      <li><a href="#s2">Traditional CRUD Approach & Its Problems</a></li>
+      <li><a href="#s3">The State Management Problem (Video Pipeline)</a></li>
+      <li><a href="#s4">What is Event Sourcing?</a></li>
+      <li><a href="#s5">Event Log — Append-Only Log</a></li>
+      <li><a href="#s6">Hydration — Rebuilding State from Events</a></li>
+      <li><a href="#s7">Banking Example — Event Sourcing in Action</a></li>
+      <li><a href="#s8">Replay & Audit Trail (Time Machine!)</a></li>
+      <li><a href="#s9">Caching the Hydrated State</a></li>
+      <li><a href="#s10">Out-of-Order Events Problem & Kafka Partitions</a></li>
+      <li><a href="#s11">Real World Examples & Key Takeaways</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>What is an Event?</h2>
+    </div>
+
+    <p>In a big system like Amazon, users are constantly doing things — clicking, buying, updating. Each of these actions is called an <strong>Event</strong>.</p>
+
+    <div class="keypoint">
+      <strong>Event = Any action a user performs on your platform that changes something.</strong>
+    </div>
+
+    <h3>Examples of Events on Amazon</h3>
+    <div class="event-log">
+      <div class="event-log-title">🛒 Amazon Events</div>
+      <div class="event-entry">
+        <div class="event-dot dot-blue"></div>
+        <div class="event-info">
+          <div class="event-name">ADD_ITEM_TO_CART</div>
+          <div class="event-meta">User added a product to their cart</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-yellow"></div>
+        <div class="event-info">
+          <div class="event-name">CHECKOUT_ITEM</div>
+          <div class="event-meta">User placed an order</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-teal"></div>
+        <div class="event-info">
+          <div class="event-name">PRODUCT_UPLOADED</div>
+          <div class="event-meta">A seller added a new product</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-green"></div>
+        <div class="event-info">
+          <div class="event-name">PRODUCT_PRICE_UPDATED</div>
+          <div class="event-meta">A seller changed a product's price from ₹90 to ₹100</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-red"></div>
+        <div class="event-info">
+          <div class="event-name">ORDER_CANCELLED</div>
+          <div class="event-meta">User cancelled their order</div>
+        </div>
+      </div>
+    </div>
+
+    <p>Every click, every update, every purchase — they're all events. Big systems process <em>millions</em> of these events every second.</p>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>Traditional CRUD Approach & Its Problems</h2>
+    </div>
+
+    <p>The way most developers handle events is simple: <strong>when something happens, update the database directly</strong>. This is the CRUD (Create, Read, Update, Delete) approach.</p>
+
+    <div class="flow">
+      <div class="flow-title">📝 Traditional CRUD Flow</div>
+      <pre style="color:var(--text);line-height:2">
+  User requests: "Change product price to ₹100"
+         |
+         ▼
+  API Gateway → Nginx (Reverse Proxy) → Server
+         |
+         ▼
+  Server runs SQL:
+  UPDATE products SET price = 100 WHERE id = 1;
+         |
+         ▼
+  Database row is updated (old value LOST forever)
+         |
+         ▼
+  Next read: returns ₹100 ✅</pre>
+    </div>
+
+    <h3>Problems with CRUD at Scale</h3>
+
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>❌ Problem 1: Database Locking</h4>
+        <ul>
+          <li>To update a row, you must acquire a lock</li>
+          <li>While locked, no one can read that row</li>
+          <li>High-frequency updates → constant locking</li>
+          <li>Bottleneck for all readers</li>
+          <li>Race conditions possible</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-a">
+        <h4>❌ Problem 2: State is Lost</h4>
+        <ul>
+          <li>You only store the CURRENT value</li>
+          <li>Old values are permanently overwritten</li>
+          <li>No way to know what happened before</li>
+          <li>Can't audit: "why is the price ₹100 now?"</li>
+          <li>Can't see history or replay events</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ Race Condition Example:</strong><br>
+      Seller updates price to ₹100. At the exact same millisecond, a buyer reads the price. The buyer might see ₹90 (old value) because the lock hadn't been released yet. With many concurrent updates, this is a constant problem.
+    </div>
+  </div>
+
+  <!-- SECTION 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>The State Management Problem — Video Pipeline</h2>
+    </div>
+
+    <p>Let's understand the deeper problem with a real example: building a <strong>YouTube-like video processing pipeline</strong>.</p>
+
+    <p>When you upload a video to YouTube, it doesn't go live immediately. It gets processed — converted to 360p, 480p, 720p, 1080p, 4K, transcribed, optimized. This takes time (10–20 minutes even with good servers).</p>
+
+    <h3>The Naive Design (CRUD approach)</h3>
+    <div class="flow">
+      <div class="flow-title">🎬 Video Pipeline States (Traditional Way)</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Video uploaded by user
+         │
+         ▼
+  DB: status = "UPLOADED"   ← update DB
+         │
+  Worker pool picks up video
+         ▼
+  DB: status = "PROCESSING" ← update DB
+         │
+  Worker done, re-uploads processed video
+         ▼
+  DB: status = "SUCCESS"    ← update DB
+  (or "FAILED" if error)</pre>
+    </div>
+
+    <h3>What Goes Wrong?</h3>
+
+    <div class="danger">
+      <strong>❌ Failure Scenario 1: Upload success, but DB update fails</strong><br>
+      Video is uploaded to S3 successfully, but the DB update to "UPLOADED" fails (DB was busy). The status stays at whatever it was before. The video exists but is never picked up by workers. It's stuck forever!
+    </div>
+
+    <div class="danger">
+      <strong>❌ Failure Scenario 2: Processing happens, but status never updates</strong><br>
+      Worker picks up the video and starts processing it. But the DB update to "PROCESSING" fails. The status stays "UPLOADED". Another worker might pick it up again and process it twice!
+    </div>
+
+    <div class="danger">
+      <strong>❌ Failure Scenario 3: Success, but status stays "PROCESSING"</strong><br>
+      The video processes and re-uploads successfully. But the final DB update to "SUCCESS" fails. The status stays "PROCESSING" forever. User complains: "My video is stuck!"
+    </div>
+
+    <div class="keypoint">
+      <strong>The root cause:</strong> You're trying to keep <em>two sources of truth in sync</em> — what's actually happening in the system AND what the database says. These can go out of sync any time a DB write fails. And you have <strong>no way to trace back</strong> where exactly things went wrong.
+    </div>
+  </div>
+
+  <!-- SECTION 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>What is Event Sourcing?</h2>
+    </div>
+
+    <p>Event Sourcing says: <strong>instead of updating a database when something happens, just record that something happened.</strong> The events themselves ARE the source of truth.</p>
+
+    <div class="keypoint">
+      <strong>Core idea:</strong> Never directly update state in a database. Instead, emit (record) an event every time anything happens. The current state can always be derived by replaying all events in order.
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>❌ Traditional CRUD</h4>
+        <ul>
+          <li>Store only the latest state</li>
+          <li>Update row in DB when something changes</li>
+          <li>Old state is lost forever</li>
+          <li>DB is the source of truth</li>
+          <li>State can go out of sync</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>✅ Event Sourcing</h4>
+        <ul>
+          <li>Store ALL events, never delete</li>
+          <li>Append new event when something happens</li>
+          <li>Full history is always available</li>
+          <li>Events are the source of truth</li>
+          <li>Current state is derived from events</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">📖</div>
+      <div class="analogy-text">
+        <strong>Analogy — Bank Ledger vs Bank Balance:</strong><br>
+        Traditional: Just store current balance (₹500). History is gone.<br>
+        Event Sourcing: Keep a full ledger — every deposit, every withdrawal. Balance is always calculated from ledger entries. Banks work exactly this way!
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>Event Log — The Append-Only Log</h2>
+    </div>
+
+    <p>In Event Sourcing, all events are stored in an <strong>Event Log</strong> — a special kind of storage that only allows adding new entries. You can never modify or delete past entries.</p>
+
+    <div class="keypoint">
+      <strong>Append-Only Log = You can only ADD to the end. Never edit. Never delete.</strong><br>
+      Why? Because events happened in the past. You can't change what happened. A video was uploaded before it was processed — that order can never reverse.
+    </div>
+
+    <div class="event-log">
+      <div class="event-log-title">📜 Event Log for Video Pipeline (Append-Only)</div>
+      <div class="event-entry">
+        <div class="event-dot dot-blue"></div>
+        <div class="event-info">
+          <div class="event-name">VIDEO_UPLOADED</div>
+          <div class="event-meta">videoId: "abc123", path: "s3://bucket/abc123.mp4" | 10:00:00 AM</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-yellow"></div>
+        <div class="event-info">
+          <div class="event-name">VIDEO_PROCESSING_STARTED</div>
+          <div class="event-meta">videoId: "abc123", workerId: "worker-2" | 10:05:00 AM</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-teal"></div>
+        <div class="event-info">
+          <div class="event-name">VIDEO_PROCESSING_PROGRESS</div>
+          <div class="event-meta">videoId: "abc123", progress: "30%" | 10:08:00 AM</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-teal"></div>
+        <div class="event-info">
+          <div class="event-name">VIDEO_PROCESSING_PROGRESS</div>
+          <div class="event-meta">videoId: "abc123", progress: "70%" | 10:10:00 AM</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-green"></div>
+        <div class="event-info">
+          <div class="event-name">VIDEO_PROCESSING_SUCCESS</div>
+          <div class="event-meta">videoId: "abc123", outputPath: "s3://bucket/processed/abc123/" | 10:12:00 AM</div>
+        </div>
+      </div>
+    </div>
+
+    <p>Each event has: an <strong>event name</strong>, <strong>data</strong> (relevant info), and a <strong>timestamp</strong>. Events are stored in order they happened, forever.</p>
+
+    <h3>Where to Store the Event Log?</h3>
+    <p>Any durable storage works — you could use AWS S3, a dedicated event store, or most commonly <strong>Apache Kafka</strong> (which is built specifically for this). Events are always stored and never deleted.</p>
+  </div>
+
+  <!-- SECTION 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>Hydration — Rebuilding State from Events</h2>
+    </div>
+
+    <p>So we have all events stored. But when a user asks "what's the current status of my video?", we need to compute that. This process is called <strong>Hydration</strong>.</p>
+
+    <div class="keypoint">
+      <strong>Hydration = Reading all events in order and re-computing the current state.</strong><br>
+      Instead of reading a single DB column (e.g., <code>status = "SUCCESS"</code>), you replay the sequence of events and derive what the state must be right now.
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">💧 Hydration Process — Video Status Query</div>
+      <pre style="color:var(--text);line-height:2.2">
+  User asks: "What's the status of video abc123?"
+
+  Hydration Process starts — reads events in order:
+
+  Event 1: VIDEO_UPLOADED
+  → "Ok, video was uploaded" → state = UPLOADED
+
+  Event 2: VIDEO_PROCESSING_STARTED
+  → "Ok, processing began" → state = PROCESSING
+
+  Event 3: VIDEO_PROCESSING_PROGRESS (30%)
+  → "Still processing..." → state = PROCESSING (30%)
+
+  Event 4: VIDEO_PROCESSING_PROGRESS (70%)
+  → "Still processing..." → state = PROCESSING (70%)
+
+  Event 5: VIDEO_PROCESSING_SUCCESS
+  → "Processing done!" → state = SUCCESS
+
+  No more events.
+  Return to user: "Your video status is SUCCESS ✅"
+  (can also show full timeline if user wants!)</pre>
+    </div>
+
+    <div class="success">
+      <strong>✅ Why Hydration is great:</strong><br>
+      • User can see not just the status, but the <em>full history</em> of what happened<br>
+      • If something went wrong (stuck at PROCESSING), you can see exactly where it stopped<br>
+      • No more "why is my video stuck?" mysteries — you have the complete audit trail<br>
+      • You derive truth from events, not from a DB column that could be stale
+    </div>
+  </div>
+
+  <!-- SECTION 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>Banking Example — Event Sourcing in Action</h2>
+    </div>
+
+    <p>Let's see Event Sourcing with a <strong>bank account balance</strong> — one of the most classic examples.</p>
+
+    <h3>Traditional CRUD Way (loses history)</h3>
+    <div class="flow">
+      <div class="flow-title">❌ Traditional — Only stores current balance</div>
+      <pre style="color:var(--text);line-height:2">
+  users table:
+  | user_id | balance |
+  |---------|---------|
+  | user_1  |   500   |   ← Initial deposit
+
+  +200 → UPDATE balance = 700
+  +300 → UPDATE balance = 1000
+  -500 → UPDATE balance = 500
+
+  Final: 500 ✅
+  But how did we get to 500? WHO did what? WHEN? ❌ No idea.</pre>
+    </div>
+
+    <h3>Event Sourcing Way (full history)</h3>
+
+    <div class="event-log">
+      <div class="event-log-title">📜 Event Log — Bank Account</div>
+      <div class="event-entry">
+        <div class="event-dot dot-blue"></div>
+        <div class="event-info">
+          <div class="event-name">ACCOUNT_OPENED</div>
+          <div class="event-meta">initial_balance: ₹500 | Jan 1, 9:00 AM</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-green"></div>
+        <div class="event-info">
+          <div class="event-name">DEPOSIT</div>
+          <div class="event-meta">amount: ₹200 | Jan 3, 2:00 PM</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-green"></div>
+        <div class="event-info">
+          <div class="event-name">DEPOSIT</div>
+          <div class="event-meta">amount: ₹300 | Jan 7, 4:30 PM</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-red"></div>
+        <div class="event-info">
+          <div class="event-name">WITHDRAWAL</div>
+          <div class="event-meta">amount: ₹500 | Jan 10, 11:00 AM</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Hydration Calculates the Balance</h3>
+
+    <div class="bank-step">
+      <div class="bank-badge bank-dep">START</div>
+      <div class="bank-text">Initial balance: ₹500</div>
+      <div class="bank-badge bank-bal">= ₹500</div>
+    </div>
+    <div class="bank-step">
+      <div class="bank-badge bank-dep">DEPOSIT +200</div>
+      <div class="bank-text">Add ₹200</div>
+      <div class="bank-badge bank-bal">= ₹700</div>
+    </div>
+    <div class="bank-step">
+      <div class="bank-badge bank-dep">DEPOSIT +300</div>
+      <div class="bank-text">Add ₹300</div>
+      <div class="bank-badge bank-bal">= ₹1,000</div>
+    </div>
+    <div class="bank-step">
+      <div class="bank-badge bank-with">WITHDRAWAL -500</div>
+      <div class="bank-text">Subtract ₹500</div>
+      <div class="bank-badge bank-bal">= ₹500</div>
+    </div>
+
+    <div class="success">
+      <strong>Final balance: ₹500</strong> — and we know exactly HOW we got there, WHEN each transaction happened, and WHO did what.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🏦</div>
+      <div class="analogy-text">
+        <strong>This is literally how real banks work!</strong> When you get your bank statement, you don't just see "current balance: ₹500". You see every transaction that led to ₹500. Banks never overwrite — they always append.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 8 -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>Replay, Audit Trail & The Time Machine</h2>
+    </div>
+
+    <p>Since you have ALL events stored, you unlock three superpowers:</p>
+
+    <div class="pill-row">
+      <div class="pill">
+        <strong>🔁 Replay</strong>
+        <span>Re-run all events to verify the current state</span>
+      </div>
+      <div class="pill">
+        <strong>🔍 Audit Trail</strong>
+        <span>Full history of who did what and when</span>
+      </div>
+      <div class="pill">
+        <strong>⏱️ Time Machine</strong>
+        <span>Know the state at ANY point in the past</span>
+      </div>
+    </div>
+
+    <h3>Audit Trail</h3>
+    <div class="success">
+      <strong>Scenario:</strong> A customer calls and says "I never withdrew ₹500, why is my balance ₹500 instead of ₹1000?"<br><br>
+      With CRUD: You have no idea. Balance says ₹500, that's all you know. Maybe there was a bug. Maybe they forgot. Can't tell.<br><br>
+      With Event Sourcing: You replay all events and show them the exact log — "Here is your WITHDRAWAL event at 11:00 AM on Jan 10, from device X, IP address Y." Full proof.
+    </div>
+
+    <h3>Time Machine</h3>
+    <div class="keypoint">
+      <strong>"What was my balance 1 month ago?"</strong><br>
+      With CRUD: Impossible — you only have today's balance.<br><br>
+      With Event Sourcing: Simply replay only the events that happened before last month's date. The balance at that point in time is the answer. You can reconstruct the state at <em>any moment in history</em>.
+    </div>
+
+    <h3>Reconciliation</h3>
+    <p>If a user complains "my video is stuck in PROCESSING," you can do <strong>Reconciliation</strong> — replay all events for that video, find the true current state, and fix the display. No guessing, no manual debugging.</p>
+  </div>
+
+  <!-- SECTION 9 -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2>Caching the Hydrated State (Optimization)</h2>
+    </div>
+
+    <p>You might be thinking: <em>"If every read requires replaying thousands of events, won't that be super slow?"</em> Good point! That's why we <strong>cache the hydrated state</strong>.</p>
+
+    <div class="flow">
+      <div class="flow-title">⚡ Optimized Event Sourcing with Cache</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Events come in (append-only log)
+         │
+         ▼
+  Hydration Process runs in background
+  (reads events → computes current state)
+         │
+         ▼
+  Stores computed state in a fast DB (e.g. PostgreSQL)
+         │
+         ▼
+  When user reads → serve from DB (fast!)
+         │
+  If user disputes state:
+         ▼
+  Run Reconciliation → replay events → re-compute
+  → update DB with corrected state</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>Important:</strong> The cached DB state is just a <em>read-optimized projection</em> of the events. It's not the source of truth — events are. If the cache gets stale or wrong, you can always fix it by replaying events.
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>Without Cache (slow)</h4>
+        <ul>
+          <li>Every read replays all events</li>
+          <li>Gets slower as log grows</li>
+          <li>High latency for users</li>
+          <li>OK for small systems</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>With Cache (fast)</h4>
+        <ul>
+          <li>Hydration runs in background</li>
+          <li>Current state stored in fast DB</li>
+          <li>Reads are instant (just query DB)</li>
+          <li>Events still the source of truth</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 10 -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2>Out-of-Order Events Problem & Kafka Partitions</h2>
+    </div>
+
+    <p>Here's a sneaky problem: when you have multiple workers consuming from an event stream, events for the same video might be processed <strong>out of order</strong>.</p>
+
+    <div class="flow">
+      <div class="flow-title">😱 Out-of-Order Problem</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Event Stream (for video abc123):
+  [1] VIDEO_UPLOADED → goes to Worker A (but it's busy!)
+  [2] VIDEO_PROCESSING_STARTED → goes to Worker B → processes → sets PROCESSING
+  [3] VIDEO_PROCESSING_SUCCESS → goes to Worker C → processes → sets SUCCESS
+
+  (Meanwhile Worker A finally finishes)
+  [1] VIDEO_UPLOADED → Worker A processes → sets UPLOADED ← 😱 WRONG!
+
+  Final (wrong) state: UPLOADED
+  (Even though the video was actually processed successfully!)</pre>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ The problem:</strong> Worker A was slow/busy. It processed Event 1 AFTER Events 2 and 3 were already processed. Now the state is incorrectly set back to UPLOADED even though the video is done.
+    </div>
+
+    <h3>Solution: Kafka Consumer Groups + Topic Partitions</h3>
+
+    <div class="keypoint">
+      <strong>The Fix:</strong> Guarantee that ALL events for a given video always go to the SAME worker. That way, order is always maintained for each video.
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">🔑 Kafka Partition Solution</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Two videos: Video A and Video B
+
+  Video A events → always go to Partition 0 → Worker 1
+  Video B events → always go to Partition 1 → Worker 2
+
+  Rule: A video's ID determines which partition it uses.
+  (e.g. hash(videoId) % numPartitions = partition number)
+
+  Now:
+  Worker 1 processes ALL of Video A's events in order:
+    UPLOADED → PROCESSING_STARTED → SUCCESS ✅
+
+  Worker 2 processes ALL of Video B's events in order:
+    UPLOADED → PROCESSING_STARTED → FAILED ✅
+
+  No mixing! No out-of-order! Order is guaranteed!</pre>
+    </div>
+
+    <h3>Kafka Consumer Groups</h3>
+    <p>In Kafka, you create a <strong>Consumer Group</strong> with multiple workers. Each worker subscribes to specific partitions. Kafka ensures each partition is consumed by only one worker in the group at a time — so events within a partition are always in order.</p>
+
+    <table>
+      <thead>
+        <tr><th>Concept</th><th>What it does</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Topic</td><td>A named stream of events (e.g. "video-events")</td></tr>
+        <tr><td>Partition</td><td>A sub-division of a topic — events in a partition are always ordered</td></tr>
+        <tr><td>Consumer Group</td><td>A group of workers that share the work of reading from a topic</td></tr>
+        <tr><td>Partition Key</td><td>The value used to decide which partition an event goes to (e.g. videoId)</td></tr>
+      </tbody>
+    </table>
+
+    <div class="success">
+      <strong>✅ Kafka guarantees:</strong> All events with the same partition key (e.g. same videoId) always go to the same partition, and thus the same worker. Order is maintained. No dirty reads.
+    </div>
+  </div>
+
+  <!-- SECTION 11 -->
+  <div class="section" id="s11">
+    <div class="section-header">
+      <div class="section-num">11</div>
+      <h2>Real World Examples & Key Takeaways</h2>
+    </div>
+
+    <h3>Amazon Order Tracking — Pure Event Sourcing</h3>
+    <div class="event-log">
+      <div class="event-log-title">📦 Amazon Order — Event Sequence</div>
+      <div class="event-entry">
+        <div class="event-dot dot-blue"></div>
+        <div class="event-info">
+          <div class="event-name">ORDER_PLACED</div>
+          <div class="event-meta">orderId: "ORD-001", items: [{…}], amount: ₹1,500</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-yellow"></div>
+        <div class="event-info">
+          <div class="event-name">PAYMENT_CONFIRMED</div>
+          <div class="event-meta">orderId: "ORD-001", transactionId: "TXN-XYZ"</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-teal"></div>
+        <div class="event-info">
+          <div class="event-name">ORDER_DISPATCHED</div>
+          <div class="event-meta">orderId: "ORD-001", warehouse: "BLR-2", carrier: "BlueDart"</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-teal"></div>
+        <div class="event-info">
+          <div class="event-name">ORDER_SHIPPED</div>
+          <div class="event-meta">orderId: "ORD-001", trackingId: "BD-12345"</div>
+        </div>
+      </div>
+      <div class="event-entry">
+        <div class="event-dot dot-green"></div>
+        <div class="event-info">
+          <div class="event-name">ORDER_DELIVERED</div>
+          <div class="event-meta">orderId: "ORD-001", deliveredAt: "2024-01-15 14:32"</div>
+        </div>
+      </div>
+    </div>
+
+    <p>Amazon never stores just <code>status = "DELIVERED"</code>. They store every event. So when you open the tracking page, they replay those events and show you every step of the journey.</p>
+
+    <h3>Full Summary — Event Sourcing vs Traditional</h3>
+
+    <table>
+      <thead>
+        <tr><th>Feature</th><th>Traditional CRUD</th><th>Event Sourcing</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Storage</td><td>Only current state</td><td>Full event history forever</td></tr>
+        <tr><td>Update method</td><td>Overwrite row in DB</td><td>Append new event to log</td></tr>
+        <tr><td>History</td><td>None — lost forever</td><td>Complete audit trail</td></tr>
+        <tr><td>Current state</td><td>Direct read from DB</td><td>Derived via Hydration</td></tr>
+        <tr><td>Debugging</td><td>Hard — state is opaque</td><td>Easy — replay events</td></tr>
+        <tr><td>"What was state 1 month ago?"</td><td>Impossible</td><td>Replay events up to that date</td></tr>
+        <tr><td>DB locking problem</td><td>Yes — frequent writes = locks</td><td>No — just append, no locking</td></tr>
+        <tr><td>Complexity</td><td>Simple</td><td>More complex, harder to migrate</td></tr>
+        <tr><td>Used by</td><td>Most simple apps</td><td>Amazon, Netflix, Uber, Banks</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Key Terms to Remember</h3>
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="icon">📜</div>
+        <h4>Event Log</h4>
+        <p>An append-only record of all events that ever happened. Never modified, never deleted. The single source of truth.</p>
+      </div>
+      <div class="summary-card">
+        <div class="icon">💧</div>
+        <h4>Hydration</h4>
+        <p>The process of reading all events in order and computing the current state. Like pressing play on a recording to see where it ends up.</p>
+      </div>
+      <div class="summary-card">
+        <div class="icon">🔁</div>
+        <h4>Replay</h4>
+        <p>Re-running events for auditing or reconciliation. Used when the cached state is wrong or a user disputes something.</p>
+      </div>
+      <div class="summary-card">
+        <div class="icon">🔍</div>
+        <h4>Reconciliation</h4>
+        <p>When the cached state and the event log disagree, replay events to re-compute and fix the cached state.</p>
+      </div>
+      <div class="summary-card">
+        <div class="icon">⏱️</div>
+        <h4>Time Machine</h4>
+        <p>Replay events only up to a certain date/time to know what the state was at any point in history.</p>
+      </div>
+      <div class="summary-card">
+        <div class="icon">🔑</div>
+        <h4>Kafka Partitions</h4>
+        <p>Ensures all events for the same object (e.g. same video, same order) go to the same worker in the right order. Prevents dirty reads.</p>
+      </div>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ Important Warning from the video:</strong><br>
+      Event Sourcing is powerful but it's a <strong>big architectural decision</strong>. Once you go event-sourcing, your entire system needs to be re-architected around event logs as the source of truth. Going back is very hard. Only choose it when you truly need the audit trail, history, and replay capabilities.
+    </div>
+
+    <div class="keypoint">
+      <strong>Coming next:</strong> CQRS (Command Query Responsibility Segregation) — a pattern that pairs naturally with Event Sourcing to separate "write" and "read" responsibilities. The architecture we built in Section 9 (events + cached state) is already a simplified version of CQRS!
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:0.85rem;">
+    📼 Video 3 of the System Design Playlist &nbsp;|&nbsp; Next: CQRS — Command Query Responsibility Segregation
+  </div>
+
+</div>
+</body>
+</html>

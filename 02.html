@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design – Part 2 Notes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #1e2130;
+    --border: #2d3148;
+    --accent: #5b8dee;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --orange: #fb923c;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --code-bg: #13161f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 860px; margin: 0 auto; }
+
+  .header {
+    text-align: center;
+    padding: 2.5rem 2rem;
+    background: linear-gradient(135deg, #1a1d27 0%, #1e2130 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(167,139,250,0.15) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .header .tag {
+    display: inline-block;
+    background: rgba(167,139,250,0.15);
+    color: var(--accent2);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 0.3rem 0.9rem;
+    border-radius: 20px;
+    border: 1px solid rgba(167,139,250,0.3);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+  }
+  .header h1 { font-size: 2rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem; }
+  .header p { color: var(--muted); font-size: 0.95rem; }
+
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .toc h2 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
+  .toc ol { padding-left: 1.4rem; }
+  .toc li { margin-bottom: 0.4rem; }
+  .toc a { color: var(--accent2); text-decoration: none; font-size: 0.93rem; }
+  .toc a:hover { text-decoration: underline; }
+
+  .section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-num {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent2), var(--orange));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.9rem; color: #fff;
+    flex-shrink: 0;
+  }
+  .section h2 { font-size: 1.25rem; font-weight: 700; color: #fff; }
+
+  p { margin-bottom: 1rem; color: var(--text); font-size: 0.96rem; }
+  p:last-child { margin-bottom: 0; }
+
+  .keypoint {
+    background: rgba(91,141,238,0.08);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem;
+    margin: 1.2rem 0;
+    font-size: 0.93rem;
+  }
+  .keypoint strong { color: var(--accent); }
+
+  .warn {
+    background: rgba(251,191,36,0.08);
+    border-left: 3px solid var(--yellow);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem;
+    margin: 1.2rem 0;
+    font-size: 0.93rem;
+  }
+  .warn strong { color: var(--yellow); }
+
+  .success {
+    background: rgba(52,211,153,0.08);
+    border-left: 3px solid var(--green);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem;
+    margin: 1.2rem 0;
+    font-size: 0.93rem;
+  }
+  .success strong { color: var(--green); }
+
+  .danger {
+    background: rgba(248,113,113,0.08);
+    border-left: 3px solid var(--red);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.2rem;
+    margin: 1.2rem 0;
+    font-size: 0.93rem;
+  }
+  .danger strong { color: var(--red); }
+
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.2rem 0;
+  }
+  .compare-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    margin: 1.2rem 0;
+  }
+  .compare-card {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem;
+  }
+  .compare-card h4 {
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .compare-card.vs-a h4 { color: var(--accent); }
+  .compare-card.vs-b h4 { color: var(--accent2); }
+  .compare-card.vs-c h4 { color: var(--orange); }
+  .compare-card ul { padding-left: 1.2rem; }
+  .compare-card li { font-size: 0.88rem; color: var(--muted); margin-bottom: 0.35rem; }
+
+  .flow {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1.2rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    overflow-x: auto;
+  }
+  .flow-title {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 1rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    margin: 1.4rem 0 0.7rem;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.65rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 0 0.2rem;
+  }
+  .badge-blue { background: rgba(91,141,238,0.15); color: var(--accent); border: 1px solid rgba(91,141,238,0.3); }
+  .badge-green { background: rgba(52,211,153,0.15); color: var(--green); border: 1px solid rgba(52,211,153,0.3); }
+  .badge-yellow { background: rgba(251,191,36,0.15); color: var(--yellow); border: 1px solid rgba(251,191,36,0.3); }
+  .badge-red { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .badge-purple { background: rgba(167,139,250,0.15); color: var(--accent2); border: 1px solid rgba(167,139,250,0.3); }
+  .badge-orange { background: rgba(251,146,60,0.15); color: var(--orange); border: 1px solid rgba(251,146,60,0.3); }
+
+  table { width: 100%; border-collapse: collapse; margin: 1.2rem 0; font-size: 0.88rem; }
+  th { background: var(--code-bg); color: var(--accent2); padding: 0.7rem 1rem; text-align: left; font-weight: 600; border-bottom: 2px solid var(--border); }
+  td { padding: 0.65rem 1rem; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .analogy {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin: 1rem 0;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  .analogy-icon { font-size: 1.5rem; flex-shrink: 0; }
+  .analogy-text { font-size: 0.9rem; }
+  .analogy-text strong { color: #fff; }
+
+  /* Evolution timeline */
+  .timeline {
+    position: relative;
+    margin: 1.5rem 0;
+    padding-left: 2rem;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.5rem;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--accent2), var(--orange));
+    border-radius: 2px;
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -1.65rem;
+    top: 1.2rem;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent2);
+    border: 2px solid var(--bg);
+  }
+  .timeline-item h4 { color: var(--accent2); font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .timeline-item p { font-size: 0.87rem; color: var(--muted); margin: 0; }
+
+  /* pros cons grid */
+  .pros-cons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.2rem 0;
+  }
+  .pros, .cons {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem;
+  }
+  .pros h4 { color: var(--green); font-size: 0.88rem; margin-bottom: 0.8rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+  .cons h4 { color: var(--red); font-size: 0.88rem; margin-bottom: 0.8rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+  .pros li, .cons li { font-size: 0.87rem; color: var(--muted); margin-bottom: 0.4rem; padding-left: 0.2rem; list-style: none; }
+  .pros li::before { content: '✅ '; }
+  .cons li::before { content: '❌ '; }
+
+  /* Summary recap */
+  .recap-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.2rem 0;
+  }
+  .recap-card {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem;
+  }
+  .recap-card .icon { font-size: 1.8rem; margin-bottom: 0.6rem; }
+  .recap-card h4 { font-size: 0.9rem; font-weight: 600; color: #fff; margin-bottom: 0.4rem; }
+  .recap-card p { font-size: 0.83rem; color: var(--muted); margin: 0; }
+
+  code {
+    background: var(--code-bg);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    color: var(--accent2);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.88em;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="tag">📓 Study Notes — Video 2</div>
+    <h1>System Design Crash Course – Part 2</h1>
+    <p>Traffic patterns, Serverless, Docker containers & Kubernetes — all explained simply</p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 What's Inside</h2>
+    <ol>
+      <li><a href="#s1">The Golden Rule of System Design</a></li>
+      <li><a href="#s2">Traffic Patterns — Why They Matter</a></li>
+      <li><a href="#s3">Netflix vs YouTube vs Hotstar — Case Study</a></li>
+      <li><a href="#s4">Auto Scaling Policies</a></li>
+      <li><a href="#s5">Serverless Architecture (AWS Lambda)</a></li>
+      <li><a href="#s6">The "Works on My Machine" Problem</a></li>
+      <li><a href="#s7">Virtualization (VMs)</a></li>
+      <li><a href="#s8">Containerization (Docker)</a></li>
+      <li><a href="#s9">Container Orchestration (Kubernetes)</a></li>
+      <li><a href="#s10">Evolution Timeline & Full Summary</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>The Golden Rule of System Design</h2>
+    </div>
+
+    <p>Before diving in, there's one thing to always remember:</p>
+
+    <div class="keypoint">
+      <strong>System Design is never one-size-fits-all.</strong><br>
+      Every company has a different use case, different traffic pattern, and different priorities. A system that works perfectly for Netflix will crash YouTube, and vice versa. System design evolves over time with experience.
+    </div>
+
+    <p>The goal of system design is always a balance of three things:</p>
+
+    <div class="compare-grid-3">
+      <div class="compare-card vs-a">
+        <h4>🛡️ Fault Tolerant</h4>
+        <ul>
+          <li>System shouldn't crash under heavy load</li>
+          <li>Should recover from failures</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>⚡ Scalable</h4>
+        <ul>
+          <li>Should handle sudden spikes</li>
+          <li>Should scale up and down smoothly</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-c">
+        <h4>💰 Cost Optimized</h4>
+        <ul>
+          <li>Don't over-provision resources</li>
+          <li>Pay only for what you use</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">📈</div>
+      <div class="analogy-text">
+        <strong>Scaling is easy if money is no object.</strong> Just throw 10× the servers at it. But real engineering is finding the <em>optimal</em> balance — enough to handle the load, without wasting money on idle resources.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>Traffic Patterns — Why They Matter</h2>
+    </div>
+
+    <p>The biggest challenge in scaling is <strong>knowing when to scale</strong>. Traffic is not always steady — it spikes and drops. Understanding your traffic pattern is the foundation of good system design.</p>
+
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>📈 Gradual Growth (Easy to handle)</h4>
+        <ul>
+          <li>Traffic increases slowly over days/weeks</li>
+          <li>Auto-scaling policies have time to react</li>
+          <li>Add 1 server at a time as CPU crosses 70%</li>
+          <li>Very manageable</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>⚡ Sudden Spike (Hard to handle)</h4>
+        <ul>
+          <li>Traffic jumps 10× in seconds</li>
+          <li>Auto-scaling can't react fast enough</li>
+          <li>Average CPU metric takes time to update</li>
+          <li>System crashes before new servers boot up</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">📉 What Happens During a Sudden Spike</div>
+      <pre style="color:var(--text);line-height:2">
+  Normal traffic (3 servers running)
+         |
+         |  Spike! 10× traffic in seconds
+         |
+         ▼
+  CPU Avg policy says "add 1 server"
+  (but avg is still being calculated...)
+         |
+         ▼
+  2 existing servers get overwhelmed
+         |
+         ▼
+  💥 CRASH — existing servers go down
+         |
+         ▼
+  New server is still booting...
+  (too late, users already left!)</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>Key insight:</strong> Auto-scaling works on <em>averages</em>. Averages take time. But sudden spikes don't wait. This is why traffic pattern prediction is so important.
+    </div>
+  </div>
+
+  <!-- SECTION 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>Netflix vs YouTube vs Hotstar — Case Study</h2>
+    </div>
+
+    <p>All three are video streaming platforms. But their traffic patterns are completely different — so their system designs must be different too.</p>
+
+    <div class="compare-grid-3">
+      <div class="compare-card vs-a">
+        <h4>🎬 Netflix</h4>
+        <ul>
+          <li>Content is released by Netflix themselves</li>
+          <li>Movie launch dates are known weeks ahead</li>
+          <li>Traffic spike is predictable</li>
+          <li>Can pre-scale 24 hrs before launch</li>
+          <li>Can pre-cache movie on CDN edge servers</li>
+          <li>Easiest to manage</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>📺 YouTube</h4>
+        <ul>
+          <li>Anyone can publish content</li>
+          <li>Mr Beast going live? No warning!</li>
+          <li>Breaking news? No warning!</li>
+          <li>Traffic is unpredictable</li>
+          <li>Must stay pre-warmed at all times</li>
+          <li>Most expensive to operate</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-c">
+        <h4>🏏 Hotstar</h4>
+        <ul>
+          <li>Mix of movies + live cricket</li>
+          <li>Match dates known in advance</li>
+          <li>But traffic during match is wild!</li>
+          <li>Spikes on every wicket, every boundary</li>
+          <li>Must disable auto-scaling during match</li>
+          <li>Most complex pattern</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>🏏 The Hotstar Cricket Match Deep Dive</h3>
+
+    <div class="flow">
+      <div class="flow-title">📊 Hotstar Traffic Pattern During a Cricket Match</div>
+      <pre style="color:var(--text);line-height:2">
+  Before match: Normal traffic (movies service active)
+       |
+       │ Toss time → Spike ↑ (everyone tunes in)
+       |
+       │ Match starts, boring overs → Dip ↓
+       |
+       │ Wicket falls → Spike ↑ (WhatsApp buzzing!)
+       |
+       │ Not interesting → Dip ↓
+       |
+       │ Virat Kohli comes to bat → Big Spike ↑↑
+       |
+       │ Kohli out first ball → Another spike ↑ (rage)
+       |
+       │ People go back → Back button dbao → 
+       │ Now MOVIES API gets hit! ← 24 crore people!
+       |
+  After match: Scale down</pre>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ The "Back Button" problem (Hotstar's lesson):</strong><br>
+      When 24 crore people are watching live cricket and they press Back, they land on the movies homepage — which calls the <strong>Movies API</strong>. So even though Movies is at low traffic during the match, it can get hit with 24 crore requests in one second! You must keep the Movies service scaled up too during the match.
+    </div>
+
+    <h3>Netflix — How to Handle Predictable Spikes</h3>
+    <div class="success">
+      <strong>Netflix's smart approach:</strong><br>
+      ✅ <strong>Pre-scale</strong>: 24 hours before a movie launch, scale from 10 → 30 servers<br>
+      ✅ <strong>Pre-cache</strong>: Push first 10 minutes of the movie to all CDN edge servers worldwide before launch<br>
+      ✅ If the movie flops (no traffic), scale back down — no harm done<br>
+      ✅ Cost is predictable and controlled
+    </div>
+
+    <h3>Hotstar — Why to DISABLE Auto-Scaling During a Match</h3>
+    <div class="danger">
+      <strong>❌ Don't use auto-scaling during a cricket match!</strong><br>
+      During a match, traffic goes up and down every few seconds (wickets, boundaries, boring overs). If auto-scaling is ON:<br>
+      • Traffic dips → servers scale down<br>
+      • Next second, wicket falls → traffic spikes<br>
+      • New servers are still booting → crash!<br><br>
+      <strong>✅ Better approach:</strong> Keep 200 servers running for the full 4 hours of the match. Yes it costs more, but your system stays stable. Fault tolerance > cost savings during critical events.
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Platform</th><th>Traffic Type</th><th>Strategy</th><th>Auto-scaling?</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Netflix</td><td>Predictable spikes (movie launch)</td><td>Pre-scale + Pre-cache CDN</td><td>Yes, with manual override</td></tr>
+        <tr><td>YouTube</td><td>Completely unpredictable</td><td>Always pre-warmed, large buffer</td><td>Limited — always hot</td></tr>
+        <tr><td>Hotstar</td><td>Predictable start, wild during match</td><td>Pre-scale all services, disable auto-scale during match</td><td>OFF during match</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>Auto Scaling Policies</h2>
+    </div>
+
+    <p>Auto-scaling doesn't happen by magic. You have to set a <strong>policy</strong> — a rule that tells the system when to add or remove servers.</p>
+
+    <div class="flow">
+      <div class="flow-title">⚙️ Common Auto Scaling Policy Examples</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Policy 1 (Request-based):
+  "If requests in last 15 mins > 1000,
+   spin up 1 more server"
+
+  Policy 2 (CPU-based):
+  "If average CPU usage > 70%,
+   spin up 1 more server"
+
+  Policy 3 (Memory-based):
+  "If average RAM usage > 70%,
+   spin up 1 more server"
+
+  Policy 4 (Scheduled):
+  "At 11:00 PM every night before
+   the sale, scale to 30 servers"
+   ← This is what Netflix/Amazon does!</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>Important:</strong> CPU/memory based policies work great for <em>gradual</em> traffic growth. For sudden spikes, scheduled pre-scaling is more reliable because it doesn't wait for averages to update.
+    </div>
+  </div>
+
+  <!-- SECTION 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>Serverless Architecture — AWS Lambda</h2>
+    </div>
+
+    <p>Managing servers is complex — you have to worry about CPU, RAM, OS, auto-scaling policies, IP allocation, load balancer registration... What if you could skip all of that and just write code?</p>
+
+    <p>That's exactly what <strong>Serverless (AWS Lambda)</strong> does. The name is a bit misleading — there IS a server, but <strong>you don't manage it</strong>.</p>
+
+    <div class="flow">
+      <div class="flow-title">⚡ How Lambda Works</div>
+      <pre style="color:var(--text);line-height:2.2">
+  You: Write a JS/Python function
+       (just a file with code!)
+         |
+         ▼
+  Upload it to AWS Lambda
+         |
+         ▼
+  AWS gives you a public URL:
+  https://abc.execute-api.amazonaws.com/
+         |
+         ▼
+  Request comes in
+         |
+         ▼
+  Lambda spins up a tiny function instance
+  → processes request
+  → returns response
+  → self-destructs (gone!)
+
+  10 requests come in simultaneously?
+  → 10 Lambda instances spin up in parallel
+  → All 10 process their request
+  → All 10 self-destruct</pre>
+    </div>
+
+    <h3>Pricing — Very Cheap!</h3>
+    <div class="success">
+      <strong>AWS Lambda Free Tier:</strong><br>
+      ✅ First 1 million requests/month — <strong>FREE</strong><br>
+      ✅ 3.2 million seconds of compute — <strong>FREE</strong><br>
+      ✅ After that: only $0.20 per additional million requests<br><br>
+      No users → No cost. Users come → Pay only for what runs.
+    </div>
+
+    <h3>Pros and Cons of Serverless</h3>
+    <div class="pros-cons">
+      <div class="pros">
+        <h4>✅ Pros</h4>
+        <li>No server management at all</li>
+        <li>No auto-scaling config needed</li>
+        <li>Very cheap (pay per invocation)</li>
+        <li>No idle cost (0 users = $0)</li>
+        <li>Scales automatically to any traffic</li>
+        <li>Focus on code, not infrastructure</li>
+      </div>
+      <div class="cons">
+        <h4>❌ Cons</h4>
+        <li>Cold Start problem</li>
+        <li>Max 15 second execution limit</li>
+        <li>Always stateless (can't store data)</li>
+        <li>DDoS can run up massive bills</li>
+        <li>Vendor lock-in (AWS ecosystem)</li>
+        <li>No OS-level configuration possible</li>
+        <li>DB connection problems at scale</li>
+      </div>
+    </div>
+
+    <h3>The Cold Start Problem Explained</h3>
+    <div class="flow">
+      <div class="flow-title">🥶 Cold Start vs Warm Start</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Scenario: No users for several hours
+
+  First user arrives at 9:00 AM:
+       |
+       ▼
+  Lambda has to:
+  1. Pull your code from storage
+  2. Set up environment
+  3. Process request
+  Time taken: ~2 seconds ← COLD START
+
+  Second user arrives 1 second later:
+       |
+       ▼
+  Lambda is already warm!
+  Code is already loaded.
+  Time taken: ~0.1 seconds ← WARM
+
+  Hundreds of users:
+  → All subsequent lambdas spin up fast
+  → Only the very FIRST request is slow</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>Cold start only matters</strong> if you have long gaps with zero traffic. If your site always has at least a few users, Lambda stays warm and it's never a problem.
+    </div>
+
+    <h3>The Vendor Lock-In Trap</h3>
+    <div class="warn">
+      <strong>⚠️ The AWS Ecosystem Trap:</strong><br>
+      Start with Lambda → then need SQS (queue) → then API Gateway → then Route 53 (DNS) → then S3 (storage) → then CloudWatch (logs) → then Step Functions (long tasks)...<br><br>
+      Before you know it, your entire system is built on AWS services. AWS is cheap now, but if they raise prices, <strong>you have no choice</strong>. Migrating means rewriting everything.
+    </div>
+  </div>
+
+  <!-- SECTION 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>The "Works on My Machine" Problem</h2>
+    </div>
+
+    <p>This is one of the most famous and frustrating problems in software development. You build something on your laptop, it works perfectly. You deploy it to the server — and it breaks.</p>
+
+    <div class="flow">
+      <div class="flow-title">😤 Why Does This Happen?</div>
+      <pre style="color:var(--text);line-height:2">
+  Your Laptop (Windows/Mac):
+  ├── ffmpeg version 0.4.2 installed
+  ├── Python 3.9
+  ├── Node 18
+  └── 30 other libraries (specific versions)
+  → Code works ✅
+
+  Production Server (Linux Ubuntu):
+  ├── ffmpeg version 0.3.8 (different!)
+  ├── Python 3.8 (different!)
+  ├── Node 16 (different!)
+  └── Some libraries missing!
+  → Code breaks ❌</pre>
+    </div>
+
+    <p>For a real project, you might have <strong>30-40 packages</strong> with specific version requirements. Making sure all of them match exactly across your laptop and multiple server replicas is a nightmare.</p>
+
+    <div class="analogy">
+      <div class="analogy-icon">🍱</div>
+      <div class="analogy-text">
+        <strong>Analogy:</strong> Imagine you cook a perfect meal in your kitchen. You write the recipe. But the other kitchen has different utensils, different spices, even a different type of oven. The same recipe may not produce the same dish!
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>Virtualization — The First Solution (VMs)</h2>
+    </div>
+
+    <p>The first attempt to solve "works on my machine" was <strong>Virtual Machines (VMs)</strong>. The idea: bundle your entire environment (OS + libraries + code) into one package.</p>
+
+    <div class="flow">
+      <div class="flow-title">🖥️ How VMs Work</div>
+      <pre style="color:var(--text);line-height:2">
+  Your Laptop (Host OS: Windows)
+  └── Virtual Machine (Guest OS: Ubuntu)
+      ├── ffmpeg 0.4.2 installed
+      ├── All your libraries installed
+      └── Your code
+
+  You test everything inside the VM.
+  It works!
+
+  You export this VM image.
+  You deploy it to the server.
+  Server runs the same VM image.
+  → Code works on server too ✅
+
+  Scale out? Deploy same VM image
+  to more servers. Same environment!</pre>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>✅ VM Solved</h4>
+        <ul>
+          <li>"Works on my machine" problem — gone!</li>
+          <li>Same environment everywhere</li>
+          <li>Consistent across all servers</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>❌ VM Problems</h4>
+        <ul>
+          <li>Very heavy (full OS inside OS)</li>
+          <li>VM image is 4-5 GB in size</li>
+          <li>Slow to start up</li>
+          <li>Wastes resources (double OS)</li>
+          <li>Scaling is still slow</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🏠</div>
+      <div class="analogy-text">
+        <strong>VM Analogy:</strong> Instead of shipping just your recipe, you ship an entire fully-equipped kitchen inside a shipping container. It solves consistency but the container is huge and heavy!
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 8 -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>Containerization — Docker</h2>
+    </div>
+
+    <p>Google faced the same problem at massive scale. Their solution: what if we make VMs <em>lighter</em> by removing the biggest part — the full OS?</p>
+
+    <div class="keypoint">
+      <strong>The key insight:</strong> The host machine already HAS an operating system (OS kernel). Why install another full OS inside your VM? Let the container <em>share</em> the host OS kernel, and only bundle your libraries + code. That's a container!
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">📦 VM vs Container — Size Comparison</div>
+      <pre style="color:var(--text);line-height:2">
+  Virtual Machine (VM):
+  ├── Full OS (Ubuntu) → 4,000 MB
+  ├── Libraries (ffmpeg etc.) → 200 MB
+  └── Your code → 50 MB
+  Total: ~4,250 MB per VM 🐘 HEAVY
+
+  Container:
+  ├── (shares host OS kernel — not included!)
+  ├── Libraries (ffmpeg etc.) → 200 MB
+  └── Your code → 50 MB
+  Total: ~250 MB per container 🪶 LIGHT!
+
+  One physical machine can run:
+  VMs: maybe 2-3 (they're huge)
+  Containers: 15-20+ (they're tiny!)</pre>
+    </div>
+
+    <h3>Why Containers Changed Everything</h3>
+
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>Old Way (VMs / Bare Metal)</h4>
+        <ul>
+          <li>New server = minutes to boot</li>
+          <li>Install dependencies = more minutes</li>
+          <li>4 GB+ per instance</li>
+          <li>Can run 2-3 per machine</li>
+          <li>Slow to scale out</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>New Way (Containers)</h4>
+        <ul>
+          <li>Container starts in seconds</li>
+          <li>All deps already in image</li>
+          <li>~250 MB per container</li>
+          <li>Run 15-20+ per machine</li>
+          <li>Scale out in seconds</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="success">
+      <strong>✅ Containers solve BOTH problems:</strong><br>
+      1. "Works on my machine" → Build image once, runs the same everywhere<br>
+      2. Slow scaling → Containers start in seconds (not minutes like VMs)<br>
+      3. Cost efficient → Pack many containers on one physical machine
+    </div>
+
+    <h3>How Docker Works (Simple Version)</h3>
+    <div class="flow">
+      <div class="flow-title">🐳 Docker Workflow</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Step 1: Write a Dockerfile
+  (instructions: "use Ubuntu base,
+   install ffmpeg, copy my code")
+
+  Step 2: Build Docker Image
+  $ docker build -t my-app .
+  → Creates a snapshot: OS-less VM
+    with your code + dependencies
+
+  Step 3: Run container locally, test it
+  $ docker run my-app
+  → Works ✅
+
+  Step 4: Push image to registry
+  $ docker push my-app
+
+  Step 5: On any server, pull + run
+  $ docker pull my-app
+  $ docker run my-app
+  → Same environment, works everywhere ✅
+
+  Scale out: just run more containers!
+  $ docker run my-app (again and again)</pre>
+    </div>
+  </div>
+
+  <!-- SECTION 9 -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2>Container Orchestration — Kubernetes</h2>
+    </div>
+
+    <p>Containers are great. But when you're running 50+ containers across multiple servers, you need a <strong>brain</strong> to manage them all. Who creates new containers when traffic spikes? Who deletes them? Who restarts crashed containers?</p>
+
+    <p>That's what <strong>Container Orchestration</strong> solves. And the most popular tool for this is <strong>Kubernetes (K8s)</strong>.</p>
+
+    <h3>The Origin Story of Kubernetes</h3>
+    <div class="timeline">
+      <div class="timeline-item">
+        <h4>Google hits scaling problems (2000s)</h4>
+        <p>Google is running thousands of servers. Managing containers manually is impossible. They build an internal tool called <strong>Borg</strong> — a cluster management system to handle all their containers.</p>
+      </div>
+      <div class="timeline-item">
+        <h4>Borg works great (internally)</h4>
+        <p>Borg handles Google's massive scale. But it stays internal. Other companies face the same container management problem and have no solution.</p>
+      </div>
+      <div class="timeline-item">
+        <h4>Google builds "Project X" (2013)</h4>
+        <p>The team that built Borg is asked to rewrite it from scratch, applying all their learnings. Goal: a universal container orchestrator that works for any company.</p>
+      </div>
+      <div class="timeline-item">
+        <h4>Kubernetes is born and open-sourced (2014)</h4>
+        <p>Project X becomes <strong>Kubernetes</strong> (Greek for "helmsman/captain"). Google donates it to the <strong>CNCF (Cloud Native Computing Foundation)</strong>. It's now open source and maintained by the global community.</p>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>Kubernetes = Borg's lessons, rewritten for everyone.</strong><br>
+      Built by Google, donated to the world. Now the industry standard for container orchestration.
+    </div>
+
+    <h3>What Kubernetes Does for You</h3>
+
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>Without Kubernetes</h4>
+        <ul>
+          <li>Manually track which container is on which server</li>
+          <li>Manually restart crashed containers</li>
+          <li>Manually scale up/down during traffic changes</li>
+          <li>Manually handle new code deployments</li>
+          <li>Risk of downtime during updates</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>With Kubernetes</h4>
+        <ul>
+          <li>K8s auto-tracks all containers</li>
+          <li>Auto-restarts crashed containers</li>
+          <li>Auto-scales based on rules</li>
+          <li>Rolling updates with zero downtime</li>
+          <li>Built-in load balancer</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Key Kubernetes Concepts</h3>
+    <table>
+      <thead>
+        <tr><th>Concept</th><th>What it is</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Cluster</td><td>A group of servers (nodes) managed by Kubernetes</td></tr>
+        <tr><td>Node</td><td>One physical/virtual machine in the cluster</td></tr>
+        <tr><td>Pod</td><td>The smallest unit — wraps one or more containers</td></tr>
+        <tr><td>Control Plane</td><td>The brain — makes decisions about the cluster</td></tr>
+        <tr><td>Scheduler</td><td>Decides which node a new pod should run on</td></tr>
+        <tr><td>Kubelet</td><td>Agent on each node that talks to the control plane</td></tr>
+        <tr><td>etcd</td><td>Key-value store — holds all cluster state/data</td></tr>
+        <tr><td>API Server</td><td>The front door of Kubernetes — all commands go through it</td></tr>
+        <tr><td>Ingress Controller</td><td>Handles external traffic routing (like an API Gateway)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Deployment Strategies in Kubernetes</h3>
+    <div class="compare-grid">
+      <div class="compare-card vs-a">
+        <h4>🔄 Rolling Update</h4>
+        <ul>
+          <li>Replace containers one at a time</li>
+          <li>Old container removed, new one added</li>
+          <li>Zero downtime — some run old, some new</li>
+          <li>Gradual rollout</li>
+          <li>Most common strategy</li>
+        </ul>
+      </div>
+      <div class="compare-card vs-b">
+        <h4>🔵🟢 Blue-Green Deployment</h4>
+        <ul>
+          <li>Run two complete environments (Blue = old, Green = new)</li>
+          <li>Test Green fully while Blue handles traffic</li>
+          <li>Switch all traffic to Green at once</li>
+          <li>Instant rollback — just switch back to Blue</li>
+          <li>Costs more (double the resources)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">🔄 Rolling Update Visualized</div>
+      <pre style="color:var(--text);line-height:2">
+  Before update (all old containers):
+  [Old v1] [Old v1] [Old v1] [Old v1] [Old v1]
+
+  Rolling update begins:
+  [New v2] [Old v1] [Old v1] [Old v1] [Old v1]
+  [New v2] [New v2] [Old v1] [Old v1] [Old v1]
+  [New v2] [New v2] [New v2] [Old v1] [Old v1]
+  [New v2] [New v2] [New v2] [New v2] [Old v1]
+
+  After update complete:
+  [New v2] [New v2] [New v2] [New v2] [New v2]
+
+  Users never saw downtime! ✅</pre>
+    </div>
+
+    <h3>Load Testing & Stress Testing</h3>
+    <div class="keypoint">
+      <strong>What big companies like Hotstar do before a big match:</strong><br>
+      They send <em>fake traffic</em> to their own servers the day before — simulating the expected load. This is called <strong>Load Testing</strong> and <strong>Stress Testing</strong>.<br><br>
+      • <strong>Load Test</strong>: Simulate expected traffic (e.g. 24 crore users)<br>
+      • <strong>Stress Test</strong>: Push beyond limits to find the breaking point<br><br>
+      This way, they discover failures in advance and fix them before the real event.
+    </div>
+  </div>
+
+  <!-- SECTION 10 -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2>Evolution Timeline & Full Summary</h2>
+    </div>
+
+    <p>Here's how deployment technology evolved over time:</p>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <h4>Era 1: Bare Metal Servers</h4>
+        <p>Direct deployment on physical machines. Fast but environment inconsistencies caused "works on my machine" problems. Slow to scale — setting up a new machine takes hours (install OS, install dependencies, install code...).</p>
+      </div>
+      <div class="timeline-item">
+        <h4>Era 2: Virtual Machines (VMs)</h4>
+        <p>Bundle full OS + dependencies + code into one portable image. Solved the consistency problem! But VMs are 4-5 GB each, slow to start, resource heavy. One physical machine can run very few VMs.</p>
+      </div>
+      <div class="timeline-item">
+        <h4>Era 3: Containers (Docker)</h4>
+        <p>Remove the OS from the image — share host OS kernel. Now only 200-300 MB per container. Starts in seconds. Pack 15-20 containers on one machine. Solved both consistency AND scaling speed. Google pioneered this internally.</p>
+      </div>
+      <div class="timeline-item">
+        <h4>Era 4: Container Orchestration (Kubernetes)</h4>
+        <p>With 50+ containers across multiple servers, you need a brain. Kubernetes auto-manages creation, deletion, health checks, scaling, updates. Rolling updates + blue-green deployments = zero downtime. Google open-sourced this as Kubernetes in 2014.</p>
+      </div>
+      <div class="timeline-item">
+        <h4>Era 5: Serverless (Lambda)</h4>
+        <p>Don't even think about containers — just write code. AWS manages everything. Pay only per request. Amazing for unpredictable or low traffic. But: cold starts, 15s limit, vendor lock-in, stateless only. Best for simple functions, not large stateful apps.</p>
+      </div>
+    </div>
+
+    <h3>Quick Reference — When to Use What</h3>
+    <table>
+      <thead>
+        <tr><th>Technology</th><th>Best For</th><th>Main Trade-off</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Bare Metal</td><td>Maximum performance, full control</td><td>Slow to scale, "works on my machine" problem</td></tr>
+        <tr><td>VMs</td><td>Strong isolation, full OS control needed</td><td>Heavy (4+ GB), slow startup</td></tr>
+        <tr><td>Containers (Docker)</td><td>Consistent, fast, scalable deployments</td><td>Need orchestration tool at scale</td></tr>
+        <tr><td>Kubernetes</td><td>Managing containers at scale, zero-downtime deployments</td><td>Complex to set up and learn</td></tr>
+        <tr><td>Serverless (Lambda)</td><td>Event-driven, unpredictable traffic, low overhead</td><td>Cold starts, vendor lock-in, 15s limit, stateless</td></tr>
+      </tbody>
+    </table>
+
+    <h3>📖 Key Terms to Remember</h3>
+    <div class="recap-grid">
+      <div class="recap-card">
+        <div class="icon">🐳</div>
+        <h4>Docker</h4>
+        <p>The tool that creates and runs containers. Packages code + dependencies (without OS) into a portable image.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">☸️</div>
+        <h4>Kubernetes (K8s)</h4>
+        <p>The brain that manages containers across a cluster of servers. Auto-scaling, auto-healing, rolling updates.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">⚡</div>
+        <h4>Serverless / Lambda</h4>
+        <p>Write code, AWS runs it. No server management. Pay per invocation. Best for simple, stateless functions.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📊</div>
+        <h4>Traffic Pattern</h4>
+        <p>How traffic changes over time for your app. Predictable (Netflix) vs unpredictable (YouTube) changes your entire design.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🔄</div>
+        <h4>Rolling Update</h4>
+        <p>Replace containers one at a time so users never see downtime during a code deployment.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🔵🟢</div>
+        <h4>Blue-Green Deploy</h4>
+        <p>Run old + new environments in parallel. Switch all traffic instantly. Easy rollback.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🥶</div>
+        <h4>Cold Start</h4>
+        <p>The delay when a Lambda function is invoked after a long idle period. First request is slow; after that it's warm.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🔒</div>
+        <h4>Vendor Lock-In</h4>
+        <p>When you're so deep into one cloud provider's ecosystem that switching providers would require rewriting everything.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:0.85rem;">
+    📼 Video 2 of the System Design Playlist &nbsp;|&nbsp; Built on Part 1 concepts — make sure to review Part 1 notes too!
+  </div>
+
+</div>
+</body>
+</html>
