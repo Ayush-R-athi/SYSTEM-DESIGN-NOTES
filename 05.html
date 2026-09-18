@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design – Back of Envelope Calculations</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #1e2130;
+    --border: #2d3148;
+    --accent: #5b8dee;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --orange: #fb923c;
+    --teal: #2dd4bf;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --code-bg: #13161f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; padding: 2rem 1rem;
+  }
+  .container { max-width: 880px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    text-align: center; padding: 2.5rem 2rem;
+    background: linear-gradient(135deg, #1a1d27 0%, #1e2130 100%);
+    border: 1px solid var(--border); border-radius: 16px; margin-bottom: 2rem;
+    position: relative; overflow: hidden;
+  }
+  .header::before {
+    content:''; position:absolute; top:-60px; right:-60px;
+    width:200px; height:200px;
+    background: radial-gradient(circle, rgba(251,191,36,0.15) 0%, transparent 70%);
+    border-radius:50%;
+  }
+  .header .tag {
+    display:inline-block; background:rgba(251,191,36,0.15); color:var(--yellow);
+    font-size:.75rem; font-weight:600; letter-spacing:.08em;
+    padding:.3rem .9rem; border-radius:20px; border:1px solid rgba(251,191,36,0.3);
+    margin-bottom:1rem; text-transform:uppercase;
+  }
+  .header h1 { font-size:2rem; font-weight:700; color:#fff; margin-bottom:.5rem; }
+  .header p  { color:var(--muted); font-size:.95rem; }
+
+  /* TOC */
+  .toc {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:1.5rem; margin-bottom:2rem;
+  }
+  .toc h2 { font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:1rem; }
+  .toc ol { padding-left:1.4rem; }
+  .toc li { margin-bottom:.4rem; }
+  .toc a  { color:var(--yellow); text-decoration:none; font-size:.93rem; }
+  .toc a:hover { text-decoration:underline; }
+
+  /* Section */
+  .section {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:16px; padding:2rem; margin-bottom:1.5rem;
+  }
+  .section-header {
+    display:flex; align-items:center; gap:1rem;
+    margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border);
+  }
+  .section-num {
+    width:36px; height:36px;
+    background:linear-gradient(135deg, var(--yellow), var(--orange));
+    border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.9rem; color:#fff; flex-shrink:0;
+  }
+  .section h2 { font-size:1.25rem; font-weight:700; color:#fff; }
+  h3 { font-size:1rem; font-weight:600; color:#fff; margin:1.4rem 0 .7rem; }
+  p  { margin-bottom:1rem; color:var(--text); font-size:.96rem; }
+  p:last-child { margin-bottom:0; }
+  code {
+    background:var(--code-bg); padding:.1rem .4rem; border-radius:4px;
+    color:var(--yellow); font-family:'JetBrains Mono',monospace; font-size:.88em;
+  }
+
+  /* Callouts */
+  .keypoint { background:rgba(251,191,36,.08);  border-left:3px solid var(--yellow); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .keypoint strong { color:var(--yellow); }
+  .success  { background:rgba(52,211,153,.08);  border-left:3px solid var(--green);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .success  strong { color:var(--green); }
+  .info     { background:rgba(91,141,238,.08);  border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .info     strong { color:var(--accent); }
+  .warn     { background:rgba(251,146,60,.08);  border-left:3px solid var(--orange); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .warn     strong { color:var(--orange); }
+
+  /* Flow */
+  .flow {
+    background:var(--code-bg); border:1px solid var(--border);
+    border-radius:12px; padding:1.5rem; margin:1.2rem 0;
+    font-family:'JetBrains Mono',monospace; font-size:.82rem; overflow-x:auto;
+  }
+  .flow-title { font-size:.75rem; color:var(--muted); font-family:'Inter',sans-serif; text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem; }
+
+  /* Analogy */
+  .analogy {
+    background:var(--card2); border:1px solid var(--border);
+    border-radius:10px; padding:1rem 1.2rem; margin:1rem 0;
+    display:flex; gap:1rem; align-items:flex-start;
+  }
+  .analogy-icon { font-size:1.5rem; flex-shrink:0; }
+  .analogy-text { font-size:.9rem; }
+  .analogy-text strong { color:#fff; }
+
+  /* Storage ladder */
+  .storage-ladder {
+    display:flex; flex-direction:column; gap:.5rem; margin:1.2rem 0;
+  }
+  .storage-row {
+    display:flex; align-items:center; gap:1rem;
+    background:var(--code-bg); border:1px solid var(--border);
+    border-radius:10px; padding:.8rem 1.2rem;
+  }
+  .storage-unit {
+    font-family:'JetBrains Mono',monospace; font-weight:700;
+    font-size:.9rem; width:90px; flex-shrink:0;
+  }
+  .storage-eq  { color:var(--muted); font-size:.85rem; flex:1; }
+  .storage-mem { font-size:.8rem; font-weight:600; padding:.2rem .6rem; border-radius:5px; flex-shrink:0; }
+  .s1 { color:var(--teal);   border:1px solid var(--teal);   background:rgba(45,212,191,.1); }
+  .s2 { color:var(--green);  border:1px solid var(--green);  background:rgba(52,211,153,.1); }
+  .s3 { color:var(--accent); border:1px solid var(--accent); background:rgba(91,141,238,.1); }
+  .s4 { color:var(--yellow); border:1px solid var(--yellow); background:rgba(251,191,36,.1); }
+  .s5 { color:var(--orange); border:1px solid var(--orange); background:rgba(251,146,60,.1); }
+  .s6 { color:var(--red);    border:1px solid var(--red);    background:rgba(248,113,113,.1); }
+
+  /* Latency ladder */
+  .lat-bar-wrap { margin:1.2rem 0; }
+  .lat-row {
+    display:flex; align-items:center; gap:1rem; margin-bottom:.6rem;
+  }
+  .lat-label { width:180px; font-size:.82rem; color:var(--muted); flex-shrink:0; }
+  .lat-bar-bg { flex:1; background:var(--code-bg); border-radius:4px; height:22px; overflow:hidden; border:1px solid var(--border); }
+  .lat-bar    { height:100%; border-radius:4px; display:flex; align-items:center; padding-left:.5rem; font-size:.72rem; font-weight:600; white-space:nowrap; }
+  .lat-val    { font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--muted); width:110px; text-align:right; flex-shrink:0; }
+
+  /* Calc steps */
+  .calc-block {
+    background:var(--code-bg); border:1px solid var(--border);
+    border-radius:12px; padding:1.5rem; margin:1.2rem 0;
+  }
+  .calc-title {
+    font-size:.75rem; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.06em; margin-bottom:1rem; font-family:'Inter',sans-serif;
+  }
+  .calc-step {
+    display:flex; align-items:flex-start; gap:1rem; margin-bottom:1rem;
+    padding-bottom:1rem; border-bottom:1px dashed var(--border);
+  }
+  .calc-step:last-child { margin-bottom:0; padding-bottom:0; border-bottom:none; }
+  .calc-num {
+    width:26px; height:26px; border-radius:50%;
+    background:var(--yellow); color:#000;
+    display:flex; align-items:center; justify-content:center;
+    font-size:.75rem; font-weight:700; flex-shrink:0; margin-top:.1rem;
+  }
+  .calc-content {}
+  .calc-content .label { font-size:.82rem; color:var(--muted); margin-bottom:.25rem; }
+  .calc-content .math {
+    font-family:'JetBrains Mono',monospace; font-size:.9rem; color:#fff;
+    background:rgba(255,255,255,.04); padding:.4rem .8rem;
+    border-radius:6px; display:inline-block; margin:.25rem 0;
+  }
+  .calc-content .result {
+    font-size:.85rem; color:var(--yellow); font-weight:600; margin-top:.25rem;
+  }
+
+  /* Assumption tag */
+  .assumption-box {
+    background:var(--code-bg); border:1px solid var(--border);
+    border-radius:10px; padding:1.2rem; margin:1.2rem 0;
+  }
+  .assumption-box .title { font-size:.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.8rem; }
+  .assumption-row {
+    display:flex; align-items:center; gap:.8rem; margin-bottom:.5rem;
+  }
+  .assumption-row:last-child { margin-bottom:0; }
+  .a-key  { font-size:.82rem; color:var(--accent2); font-weight:600; width:200px; flex-shrink:0; }
+  .a-val  { font-family:'JetBrains Mono',monospace; font-size:.85rem; color:var(--yellow); }
+
+  /* Compare grid */
+  .compare-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem; }
+  .compare-card h4 { font-size:.88rem; font-weight:600; margin-bottom:.8rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+  .compare-card.c-green h4 { color:var(--green); }
+  .compare-card.c-red   h4 { color:var(--red); }
+  .compare-card.c-blue  h4 { color:var(--accent); }
+  .compare-card.c-yell  h4 { color:var(--yellow); }
+  .compare-card ul { padding-left:1.2rem; }
+  .compare-card li { font-size:.88rem; color:var(--muted); margin-bottom:.35rem; }
+
+  /* Tip boxes */
+  .tip-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .tip-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem; text-align:center; }
+  .tip-card .icon { font-size:1.6rem; margin-bottom:.5rem; }
+  .tip-card h4 { font-size:.88rem; font-weight:600; color:#fff; margin-bottom:.4rem; }
+  .tip-card p  { font-size:.8rem; color:var(--muted); margin:0; }
+
+  /* Table */
+  table { width:100%; border-collapse:collapse; margin:1.2rem 0; font-size:.88rem; }
+  th { background:var(--code-bg); color:var(--yellow); padding:.7rem 1rem; text-align:left; font-weight:600; border-bottom:2px solid var(--border); }
+  td { padding:.65rem 1rem; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(255,255,255,.02); }
+
+  /* Formula highlight */
+  .formula {
+    background: linear-gradient(135deg, rgba(251,191,36,.08), rgba(251,146,60,.08));
+    border: 1px solid rgba(251,191,36,.3);
+    border-radius:10px; padding:1rem 1.4rem; margin:1.2rem 0;
+    font-family:'JetBrains Mono',monospace; font-size:.9rem;
+    text-align:center; color:#fff;
+  }
+  .formula .label { font-family:'Inter',sans-serif; font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="tag">📓 Study Notes — Video 5</div>
+    <h1>Back of Envelope Calculations</h1>
+    <p>How engineers estimate servers, storage & QPS before building anything — with a full Twitter worked example</p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 What's Inside</h2>
+    <ol>
+      <li><a href="#s1">What is Back of Envelope Calculation?</a></li>
+      <li><a href="#s2">Why Every Engineer Needs This Skill</a></li>
+      <li><a href="#s3">Key Numbers to Memorize</a></li>
+      <li><a href="#s4">Latency Numbers Every Programmer Should Know</a></li>
+      <li><a href="#s5">Worked Example — Estimating Twitter's QPS</a></li>
+      <li><a href="#s6">Worked Example — Estimating Twitter's Storage</a></li>
+      <li><a href="#s7">The Three Golden Rules</a></li>
+      <li><a href="#s8">Real-World Workflow (How Engineers Actually Do It)</a></li>
+      <li><a href="#s9">Practice Template — Do It Yourself</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>What is Back of Envelope Calculation?</h2>
+    </div>
+
+    <p>The name "Back of Envelope" comes from the idea of doing <strong>rough calculations on the back of an envelope</strong> — quick, approximate, not exact. In system design, it means estimating your resource needs <em>before</em> you build anything.</p>
+
+    <div class="keypoint">
+      <strong>Definition:</strong> A quick, rough estimation to figure out how many servers, how much storage, and what database scale your system needs — based on expected user traffic. No exact numbers, just good approximations.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">✉️</div>
+      <div class="analogy-text">
+        <strong>Why "Back of Envelope"?</strong><br>
+        Imagine you're at a meeting and someone says "how much storage will we need?" You grab the nearest envelope, flip it over, and do a quick rough calculation on the back. That's it — no spreadsheet, no calculator, just good approximations based on known numbers.
+      </div>
+    </div>
+
+    <p>This concept was popularized by <strong>Jeff Dean</strong>, a legendary Google scientist, in a famous presentation where he used these calculations to choose the best system design for Google's infrastructure.</p>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>Why Every Engineer Needs This Skill</h2>
+    </div>
+
+    <p>When your team wants to deploy a new system, the DevOps team will ask you these questions. If you can't answer them, you're guessing blindly — which wastes money or causes crashes.</p>
+
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>❌ Without This Skill</h4>
+        <ul>
+          <li>DevOps asks: "How many servers?"</li>
+          <li>You guess: "Uh... give me 8 CPUs?"</li>
+          <li>You get 8 CPUs — but only need 2</li>
+          <li>You're wasting money on idle resources</li>
+          <li>OR you under-provision and it crashes</li>
+          <li>You look like a junior who doesn't know their system</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>✅ With This Skill</h4>
+        <ul>
+          <li>DevOps asks: "How many servers?"</li>
+          <li>You say: "My DAU is 150M, 3500 QPS average, so 2 servers with 4 CPU each, auto-scale at 70% CPU"</li>
+          <li>Confident, reasoned answer</li>
+          <li>Right-sized resources = cost savings</li>
+          <li>Critical for senior engineer / architect roles</li>
+          <li>Also asked in system design interviews!</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>DevOps teams always ask:</p>
+    <div class="assumption-box">
+      <div class="title">📋 Questions DevOps Will Ask You</div>
+      <div class="assumption-row"><span class="a-key">How many servers?</span><span class="a-val">→ derived from QPS</span></div>
+      <div class="assumption-row"><span class="a-key">Server configuration?</span><span class="a-val">→ CPU & RAM per server</span></div>
+      <div class="assumption-row"><span class="a-key">How much disk storage?</span><span class="a-val">→ derived from data per user × users × time</span></div>
+      <div class="assumption-row"><span class="a-key">Database configuration?</span><span class="a-val">→ CPU, RAM, IOPS for DB server</span></div>
+      <div class="assumption-row"><span class="a-key">SSD or HDD? How many GB?</span><span class="a-val">→ derived from storage estimation</span></div>
+    </div>
+  </div>
+
+  <!-- SECTION 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>Key Numbers to Memorize</h2>
+    </div>
+
+    <h3>⏱️ Time — Seconds in a Day</h3>
+    <div class="formula">
+      <div class="label">Seconds in a Day</div>
+      24 hours × 60 minutes × 60 seconds = 86,400 ≈ <span style="color:var(--yellow)">100,000 (1 Lakh)</span>
+    </div>
+    <div class="keypoint">
+      <strong>Rule #1 of Back of Envelope:</strong> Always round off. 86,400 seconds → just say "approximately 1 lakh seconds per day." This is good enough for estimates.
+    </div>
+
+    <h3>💾 Storage Units — The Size Ladder</h3>
+    <div class="storage-ladder">
+      <div class="storage-row">
+        <div class="storage-unit s1">1 Bit</div>
+        <div class="storage-eq">Smallest unit — a single 0 or 1</div>
+        <div class="storage-mem s1">—</div>
+      </div>
+      <div class="storage-row">
+        <div class="storage-unit s1">1 Byte</div>
+        <div class="storage-eq">= 8 bits &nbsp;|&nbsp; One character of text</div>
+        <div class="storage-mem s1">10⁰</div>
+      </div>
+      <div class="storage-row">
+        <div class="storage-unit s2">1 KB</div>
+        <div class="storage-eq">= 1,000 Bytes &nbsp;|&nbsp; A short text message</div>
+        <div class="storage-mem s2">Thousand</div>
+      </div>
+      <div class="storage-row">
+        <div class="storage-unit s3">1 MB</div>
+        <div class="storage-eq">= 1,000 KB = 1,000,000 Bytes &nbsp;|&nbsp; A photo</div>
+        <div class="storage-mem s3">Million</div>
+      </div>
+      <div class="storage-row">
+        <div class="storage-unit s4">1 GB</div>
+        <div class="storage-eq">= 1,000 MB = 1,000,000,000 Bytes &nbsp;|&nbsp; A movie</div>
+        <div class="storage-mem s4">Billion</div>
+      </div>
+      <div class="storage-row">
+        <div class="storage-unit s5">1 TB</div>
+        <div class="storage-eq">= 1,000 GB = 1 Trillion Bytes &nbsp;|&nbsp; 1000 movies</div>
+        <div class="storage-mem s5">Trillion</div>
+      </div>
+      <div class="storage-row">
+        <div class="storage-unit s6">1 PB</div>
+        <div class="storage-eq">= 1,000 TB = 1 Quadrillion Bytes &nbsp;|&nbsp; Entire Netflix library</div>
+        <div class="storage-mem s6">Quadrillion</div>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>Easy trick to remember:</strong> Every step up multiplies by 1,000.<br>
+      Byte → KB → MB → GB → TB → PB = just keep multiplying by 1,000 each time.
+    </div>
+
+    <h3>🧮 Quick Size Reference</h3>
+    <table>
+      <thead><tr><th>Thing</th><th>Approximate Size</th></tr></thead>
+      <tbody>
+        <tr><td>One character of text</td><td>1 Byte</td></tr>
+        <tr><td>A UUID / ID field</td><td>64 Bytes</td></tr>
+        <tr><td>A tweet (text only, 140 chars)</td><td>~140 Bytes</td></tr>
+        <tr><td>A small photo / thumbnail</td><td>~200 KB</td></tr>
+        <tr><td>An average photo upload</td><td>~1 MB</td></tr>
+        <tr><td>A short video clip (1 min)</td><td>~50 MB</td></tr>
+        <tr><td>A full HD movie</td><td>~1–4 GB</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>Latency Numbers Every Programmer Should Know</h2>
+    </div>
+
+    <p>These numbers (from Jeff Dean's famous talk) tell you how long different operations take. Knowing these helps you make smart architectural decisions.</p>
+
+    <div class="lat-bar-wrap">
+      <div class="lat-row">
+        <div class="lat-label">L1 Cache (CPU)</div>
+        <div class="lat-bar-bg"><div class="lat-bar" style="width:1%;background:var(--teal);color:#000;">.</div></div>
+        <div class="lat-val">0.5 ns</div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label">L2 Cache (CPU)</div>
+        <div class="lat-bar-bg"><div class="lat-bar" style="width:2%;background:var(--teal);color:#000;">.</div></div>
+        <div class="lat-val">7 ns</div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label">RAM (Main Memory)</div>
+        <div class="lat-bar-bg"><div class="lat-bar" style="width:5%;background:var(--green);color:#000;">.</div></div>
+        <div class="lat-val">100 ns</div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label">Redis (In-memory)</div>
+        <div class="lat-bar-bg"><div class="lat-bar" style="width:10%;background:var(--green);color:#000;">.</div></div>
+        <div class="lat-val">~1 ms</div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label">SSD Read</div>
+        <div class="lat-bar-bg"><div class="lat-bar" style="width:30%;background:var(--yellow);">SSD Read</div></div>
+        <div class="lat-val">~0.1 ms</div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label">HDD Disk Seek</div>
+        <div class="lat-bar-bg"><div class="lat-bar" style="width:60%;background:var(--orange);">Disk Seek</div></div>
+        <div class="lat-val">~10 ms</div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label">DB Query (Disk-based)</div>
+        <div class="lat-bar-bg"><div class="lat-bar" style="width:65%;background:var(--orange);">DB Query</div></div>
+        <div class="lat-val">~10–50 ms</div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label">India → US Server</div>
+        <div class="lat-bar-bg"><div class="lat-bar" style="width:90%;background:var(--red);">Cross-region network</div></div>
+        <div class="lat-val">~150–200 ms</div>
+      </div>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-green">
+        <h4>🚀 Fast (use these whenever possible)</h4>
+        <ul>
+          <li><strong>RAM / Memory</strong> — nanoseconds. Redis, in-memory caches</li>
+          <li><strong>CPU Cache</strong> — sub-nanosecond. Automatic</li>
+          <li><strong>Local network</strong> — sub-millisecond</li>
+        </ul>
+      </div>
+      <div class="compare-card c-red">
+        <h4>🐢 Slow (avoid if possible)</h4>
+        <ul>
+          <li><strong>Disk seeks (HDD)</strong> — 10ms. Avoid random reads</li>
+          <li><strong>Cross-region calls</strong> — 150ms+. Use CDN/edge caching</li>
+          <li><strong>Network I/O</strong> — compress before sending</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>The #1 rule from latency numbers:</strong><br>
+      <strong>Memory is fast. Disk is slow.</strong><br>
+      That's why Redis (in-memory cache) is so much faster than a database query (disk I/O). Always try to serve reads from memory. Only go to disk for writes that must persist.
+    </div>
+
+    <div class="info">
+      <strong>Practical takeaways:</strong><br>
+      • Avoid disk seeks wherever possible — design your data access to be sequential, not random<br>
+      • Compress data before sending it over the network — simple algorithms are fast enough<br>
+      • Use CDN to serve users from nearby servers — cross-region latency kills UX<br>
+      • Data center round trips cost time — minimize cross-service calls
+    </div>
+  </div>
+
+  <!-- SECTION 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>Worked Example — Estimating Twitter's QPS</h2>
+    </div>
+
+    <p><strong>Problem:</strong> "We're building a Twitter clone. Estimate the QPS (Queries Per Second) and storage requirements."</p>
+
+    <h3>Step 1: Write Down Your Assumptions</h3>
+    <div class="assumption-box">
+      <div class="title">📋 Assumptions (always write these first!)</div>
+      <div class="assumption-row"><span class="a-key">Monthly Active Users</span><span class="a-val">300 million</span></div>
+      <div class="assumption-row"><span class="a-key">Daily active %</span><span class="a-val">50% of MAU use it daily</span></div>
+      <div class="assumption-row"><span class="a-key">Tweets per user per day</span><span class="a-val">2 tweets (average)</span></div>
+      <div class="assumption-row"><span class="a-key">Tweets with media</span><span class="a-val">10% of tweets have a photo/video</span></div>
+      <div class="assumption-row"><span class="a-key">Data retention</span><span class="a-val">5 years</span></div>
+      <div class="assumption-row"><span class="a-key">Media size per tweet</span><span class="a-val">~1 MB average</span></div>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ These are ALL approximate!</strong> 50% daily active could be 40% or 60%. 2 tweets/day could be 1 or 3. That's totally fine — this is estimation, not measurement.
+    </div>
+
+    <h3>Step 2: Calculate Daily Active Users (DAU)</h3>
+    <div class="calc-block">
+      <div class="calc-title">📊 DAU Calculation</div>
+      <div class="calc-step">
+        <div class="calc-num">1</div>
+        <div class="calc-content">
+          <div class="label">Monthly Active Users</div>
+          <div class="math">MAU = 300 million</div>
+        </div>
+      </div>
+      <div class="calc-step">
+        <div class="calc-num">2</div>
+        <div class="calc-content">
+          <div class="label">50% use it daily → Daily Active Users</div>
+          <div class="math">DAU = 300M × 50% = 150 million</div>
+          <div class="result">→ 150 million users active every day</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Step 3: Calculate Average QPS (Tweet Writes)</h3>
+    <div class="calc-block">
+      <div class="calc-title">🔢 QPS Calculation</div>
+      <div class="calc-step">
+        <div class="calc-num">1</div>
+        <div class="calc-content">
+          <div class="label">Total tweets per day</div>
+          <div class="math">150M users × 2 tweets/day = 300 million tweets/day</div>
+        </div>
+      </div>
+      <div class="calc-step">
+        <div class="calc-num">2</div>
+        <div class="calc-content">
+          <div class="label">Divide by seconds in a day (≈ 100,000)</div>
+          <div class="math">300,000,000 / 100,000 = 3,000</div>
+          <div class="result">→ Average QPS ≈ 3,500 tweets per second</div>
+        </div>
+      </div>
+      <div class="calc-step">
+        <div class="calc-num">3</div>
+        <div class="calc-content">
+          <div class="label">Peak QPS (assume 2× during a major event)</div>
+          <div class="math">3,500 × 2 = 7,000</div>
+          <div class="result">→ Peak QPS ≈ 7,000 tweets per second</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="success">
+      <strong>✅ What this tells you:</strong><br>
+      • Your database must handle <strong>3,500 INSERT operations per second</strong> on average<br>
+      • Your system must handle up to <strong>7,000 writes per second</strong> during peak (elections, breaking news, etc.)<br>
+      • Design your auto-scaling policies and DB configuration around these numbers
+    </div>
+  </div>
+
+  <!-- SECTION 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>Worked Example — Estimating Twitter's Storage</h2>
+    </div>
+
+    <h3>What does each tweet store?</h3>
+    <div class="assumption-box">
+      <div class="title">📦 Per-Tweet Data Sizes</div>
+      <div class="assumption-row"><span class="a-key">Tweet ID (UUID)</span><span class="a-val">64 Bytes</span></div>
+      <div class="assumption-row"><span class="a-key">Tweet text (140 chars avg)</span><span class="a-val">140 Bytes</span></div>
+      <div class="assumption-row"><span class="a-key">Media (photo/video, if present)</span><span class="a-val">~1 MB</span></div>
+      <div class="assumption-row"><span class="a-key">Total per text tweet</span><span class="a-val">≈ 204 Bytes ≈ ~200 Bytes</span></div>
+      <div class="assumption-row"><span class="a-key">Total per media tweet</span><span class="a-val">≈ 1 MB + 200 Bytes ≈ ~1 MB</span></div>
+    </div>
+
+    <h3>Calculate Daily Media Storage</h3>
+    <div class="calc-block">
+      <div class="calc-title">💾 Daily Storage Calculation</div>
+      <div class="calc-step">
+        <div class="calc-num">1</div>
+        <div class="calc-content">
+          <div class="label">Total tweets per day</div>
+          <div class="math">150M users × 2 tweets = 300M tweets/day</div>
+        </div>
+      </div>
+      <div class="calc-step">
+        <div class="calc-num">2</div>
+        <div class="calc-content">
+          <div class="label">How many tweets have media? (10%)</div>
+          <div class="math">300M × 10% = 30 million media tweets/day</div>
+        </div>
+      </div>
+      <div class="calc-step">
+        <div class="calc-num">3</div>
+        <div class="calc-content">
+          <div class="label">Storage for media tweets (1 MB each)</div>
+          <div class="math">30M × 1 MB = 30 million MB = 30 TB per day</div>
+          <div class="result">→ ~30 Terabytes of media storage needed per day</div>
+        </div>
+      </div>
+      <div class="calc-step">
+        <div class="calc-num">4</div>
+        <div class="calc-content">
+          <div class="label">5-year total storage</div>
+          <div class="math">30 TB/day × 365 days × 5 years</div>
+          <div class="math">= 30 × 365 × 5 ≈ 30 × 2000 = 60,000 TB</div>
+          <div class="math">= 60 Petabytes (PB)</div>
+          <div class="result">→ ≈ 55–60 Petabytes of storage needed over 5 years</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="success">
+      <strong>✅ What this tells you:</strong><br>
+      • You need <strong>~30 TB/day</strong> of object storage (like AWS S3) provisioned<br>
+      • Over 5 years, plan for <strong>~55-60 Petabytes</strong> of total storage<br>
+      • You'll need a distributed file system / object storage (not a regular DB!)<br>
+      • Budget for storage costs at this scale before starting
+    </div>
+
+    <h3>Summary of Twitter Estimates</h3>
+    <table>
+      <thead><tr><th>Metric</th><th>Estimated Value</th><th>Used For</th></tr></thead>
+      <tbody>
+        <tr><td>Monthly Active Users (MAU)</td><td>300 million</td><td>Assumption baseline</td></tr>
+        <tr><td>Daily Active Users (DAU)</td><td>150 million</td><td>Daily traffic base</td></tr>
+        <tr><td>Average QPS (writes)</td><td>~3,500 / sec</td><td>DB write capacity</td></tr>
+        <tr><td>Peak QPS (writes)</td><td>~7,000 / sec</td><td>Auto-scale limit</td></tr>
+        <tr><td>Daily media storage</td><td>~30 TB / day</td><td>S3 provisioning</td></tr>
+        <tr><td>5-year total storage</td><td>~55 PB</td><td>Long-term cost planning</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>The Three Golden Rules</h2>
+    </div>
+
+    <div class="tip-grid">
+      <div class="tip-card">
+        <div class="icon">🔢</div>
+        <h4>Rule 1: Round Everything</h4>
+        <p>86,400 seconds → say "1 lakh." 99,987 / 9.1 → say "100,000 / 10 = 10,000." Never do exact math here.</p>
+      </div>
+      <div class="tip-card">
+        <div class="icon">📝</div>
+        <h4>Rule 2: Write Assumptions</h4>
+        <p>Always explicitly write down your assumptions first. DAU, posts per day, media %. They can always be challenged and updated.</p>
+      </div>
+      <div class="tip-card">
+        <div class="icon">🏷️</div>
+        <h4>Rule 3: Label Your Units</h4>
+        <p>Don't write "5." Write "5 MB" or "5 TB" or "5,000 requests/sec." Unitless numbers are meaningless in estimates.</p>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>The most common mistake:</strong> Forgetting to label units. "I calculated 30" — 30 what? Bytes? Terabytes? Millions? Always write the unit alongside the number.
+    </div>
+
+    <h3>What are Commonly Estimated?</h3>
+    <div class="compare-grid">
+      <div class="compare-card c-yell">
+        <h4>📊 QPS (Queries Per Second)</h4>
+        <ul>
+          <li>Average QPS = normal load</li>
+          <li>Peak QPS = spike load (2× or more)</li>
+          <li>Tells you: DB write/read capacity needed</li>
+          <li>Tells you: Number of server replicas</li>
+          <li>Formula: (DAU × actions/day) ÷ 86,400</li>
+        </ul>
+      </div>
+      <div class="compare-card c-blue">
+        <h4>💾 Storage Requirements</h4>
+        <ul>
+          <li>Daily storage = DAU × data per user/day</li>
+          <li>Total storage = daily × 365 × years</li>
+          <li>Tells you: S3 bucket / disk provisioning</li>
+          <li>Tells you: Whether you need CDN, compression</li>
+          <li>Tells you: Long-term infrastructure cost</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 8 -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>Real-World Workflow (How Engineers Actually Do It)</h2>
+    </div>
+
+    <p>In practice, you don't always have production data upfront. Here's the actual workflow engineers follow when starting a new project:</p>
+
+    <div class="calc-block">
+      <div class="calc-title">🔄 Real Engineer's Workflow</div>
+      <div class="calc-step">
+        <div class="calc-num">1</div>
+        <div class="calc-content">
+          <div class="label">Start with bare minimum resources</div>
+          <div class="result">Deploy on a small machine first: 2 CPU, 4 GB RAM, 256 GB SSD</div>
+        </div>
+      </div>
+      <div class="calc-step">
+        <div class="calc-num">2</div>
+        <div class="calc-content">
+          <div class="label">Run in dev environment with real team (~8–10 users)</div>
+          <div class="result">Monitor CPU usage, memory, QPS, network in/out</div>
+        </div>
+      </div>
+      <div class="calc-step">
+        <div class="calc-num">3</div>
+        <div class="calc-content">
+          <div class="label">Extrapolate to production scale</div>
+          <div class="result">If 10 users use X CPU, then 1000 users = 100X CPU. Adjust machine size accordingly.</div>
+        </div>
+      </div>
+      <div class="calc-step">
+        <div class="calc-num">4</div>
+        <div class="calc-content">
+          <div class="label">Deploy to production with estimated resources</div>
+          <div class="result">Keep monitoring. Adjust as real traffic data comes in.</div>
+        </div>
+      </div>
+      <div class="calc-step">
+        <div class="calc-num">5</div>
+        <div class="calc-content">
+          <div class="label">Iterate and improve estimates over time</div>
+          <div class="result">Experience teaches you. Each deployment makes your next estimate more accurate.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info">
+      <strong>Pro tip from the video:</strong> Start lean on purpose. Deploy with less resources than you think you need. This forces you to see how your code actually performs under real constraints, and you avoid wasting money on idle over-provisioned hardware.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🧪</div>
+      <div class="analogy-text">
+        <strong>Think of it like cooking:</strong> Before cooking for 1000 guests, you first cook for 10 and time how long each step takes. Then you extrapolate: if 10 takes 30 minutes, 1000 will take about 300 minutes (with some parallelism). That's back-of-envelope estimation for real kitchens!
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 9 -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2>Practice Template — Do It Yourself</h2>
+    </div>
+
+    <p>Use this template every time you need to estimate for a new system. Fill in the blanks with rough numbers and work through the math:</p>
+
+    <div class="flow">
+      <div class="flow-title">📋 Back of Envelope Template (copy this!)</div>
+      <pre style="color:var(--text);line-height:2.5">
+  ╔══════════════════════════════════════════════════════╗
+  ║            BACK OF ENVELOPE ESTIMATION               ║
+  ║  System: _________________  Date: ________________   ║
+  ╠══════════════════════════════════════════════════════╣
+  ║  ASSUMPTIONS:                                        ║
+  ║  Monthly Active Users (MAU):  _______________        ║
+  ║  Daily Active % (DAU/MAU):    _______________        ║
+  ║  Actions per user per day:    _______________        ║
+  ║  % actions with media:        _______________        ║
+  ║  Average media size:          _______________        ║
+  ║  Data retention period:       _______________        ║
+  ╠══════════════════════════════════════════════════════╣
+  ║  CALCULATIONS:                                       ║
+  ║  DAU = MAU × DAU%             = _______________      ║
+  ║  Actions/day = DAU × actions  = _______________      ║
+  ║  Avg QPS = actions/day ÷ 86400= _______________      ║
+  ║  Peak QPS = Avg QPS × 2       = _______________      ║
+  ╠══════════════════════════════════════════════════════╣
+  ║  STORAGE:                                            ║
+  ║  Media actions/day = actions × media%                ║
+  ║                               = _______________      ║
+  ║  Storage/day = media × size   = ___________ TB       ║
+  ║  Total storage = /day × 365 × years                  ║
+  ║                               = ___________ PB       ║
+  ╠══════════════════════════════════════════════════════╣
+  ║  CONCLUSIONS:                                        ║
+  ║  DB write capacity needed:    _____ writes/sec       ║
+  ║  Peak capacity needed:        _____ writes/sec       ║
+  ║  Storage to provision:        _____ TB/day           ║
+  ║  Long-term storage:           _____ PB total         ║
+  ╚══════════════════════════════════════════════════════╝</pre>
+    </div>
+
+    <h3>Practice Problems — Try These Yourself</h3>
+    <div class="compare-grid">
+      <div class="compare-card c-blue">
+        <h4>🎬 YouTube Clone</h4>
+        <ul>
+          <li>1 billion MAU, 30% daily active</li>
+          <li>Average user watches 5 videos/day</li>
+          <li>Each video = 500 MB</li>
+          <li>100,000 new videos uploaded/day</li>
+          <li>Estimate: QPS for reads, upload storage/day, 3-year total</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>🛒 E-commerce App</h4>
+        <ul>
+          <li>10 million MAU, 20% daily active</li>
+          <li>Average user views 30 products/day</li>
+          <li>10,000 orders placed per day</li>
+          <li>Each product image = 200 KB</li>
+          <li>Estimate: read QPS, order write QPS, image storage</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Quick Summary — What to Remember</h3>
+    <table>
+      <thead><tr><th>Concept</th><th>Key Point</th></tr></thead>
+      <tbody>
+        <tr><td>Back of Envelope</td><td>Rough estimation of resources needed — not exact, just good enough</td></tr>
+        <tr><td>Seconds in a day</td><td>86,400 ≈ <strong>100,000 (1 lakh)</strong> — memorize this!</td></tr>
+        <tr><td>Storage units</td><td>KB → MB → GB → TB → PB, each step = ×1,000</td></tr>
+        <tr><td>Memory vs Disk</td><td>Memory (RAM/Redis) = fast. Disk (HDD/DB) = slow.</td></tr>
+        <tr><td>Average QPS formula</td><td>(DAU × actions/day) ÷ 86,400</td></tr>
+        <tr><td>Peak QPS rule</td><td>Average QPS × 2 (or more for spike-heavy apps)</td></tr>
+        <tr><td>Storage formula</td><td>DAU × media% × media_size × 365 × years</td></tr>
+        <tr><td>Rule 1</td><td>Always round to nearest 10/100/1000</td></tr>
+        <tr><td>Rule 2</td><td>Write down all assumptions explicitly first</td></tr>
+        <tr><td>Rule 3</td><td>Always label units (MB, TB, req/sec)</td></tr>
+        <tr><td>Gets better with</td><td>Experience! Each deployment teaches you to estimate better</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:.85rem;">
+    📼 Video 5 of the System Design Playlist &nbsp;|&nbsp;
+    This skill is tested in every senior system design interview — practice it regularly!
+  </div>
+
+</div>
+</body>
+</html>
