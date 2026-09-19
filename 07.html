@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design – Consistent Hashing Notes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg:#0f1117; --card:#1a1d27; --card2:#1e2130; --border:#2d3148;
+    --accent:#5b8dee; --accent2:#a78bfa; --green:#34d399; --yellow:#fbbf24;
+    --red:#f87171; --orange:#fb923c; --teal:#2dd4bf; --text:#e2e8f0;
+    --muted:#8892a4; --code-bg:#13161f;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); line-height:1.7; padding:2rem 1rem; }
+  .container { max-width:880px; margin:0 auto; }
+
+  .header {
+    text-align:center; padding:2.5rem 2rem;
+    background:linear-gradient(135deg,#1a1d27,#1e2130);
+    border:1px solid var(--border); border-radius:16px; margin-bottom:2rem;
+    position:relative; overflow:hidden;
+  }
+  .header::before {
+    content:''; position:absolute; top:-60px; right:-60px; width:200px; height:200px;
+    background:radial-gradient(circle,rgba(45,212,191,0.15) 0%,transparent 70%); border-radius:50%;
+  }
+  .header .tag {
+    display:inline-block; background:rgba(45,212,191,0.15); color:var(--teal);
+    font-size:.75rem; font-weight:600; letter-spacing:.08em; padding:.3rem .9rem;
+    border-radius:20px; border:1px solid rgba(45,212,191,0.3); margin-bottom:1rem; text-transform:uppercase;
+  }
+  .header h1 { font-size:2rem; font-weight:700; color:#fff; margin-bottom:.5rem; }
+  .header p  { color:var(--muted); font-size:.95rem; }
+
+  .toc { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin-bottom:2rem; }
+  .toc h2 { font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:1rem; }
+  .toc ol { padding-left:1.4rem; }
+  .toc li { margin-bottom:.4rem; }
+  .toc a  { color:var(--teal); text-decoration:none; font-size:.93rem; }
+  .toc a:hover { text-decoration:underline; }
+
+  .section { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:2rem; margin-bottom:1.5rem; }
+  .section-header { display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+  .section-num {
+    width:36px; height:36px; background:linear-gradient(135deg,var(--teal),var(--accent));
+    border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.9rem; color:#fff; flex-shrink:0;
+  }
+  .section h2 { font-size:1.25rem; font-weight:700; color:#fff; }
+  h3 { font-size:1rem; font-weight:600; color:#fff; margin:1.4rem 0 .7rem; }
+  p  { margin-bottom:1rem; color:var(--text); font-size:.96rem; }
+  p:last-child { margin-bottom:0; }
+  code { background:var(--code-bg); padding:.1rem .4rem; border-radius:4px; color:var(--teal); font-family:'JetBrains Mono',monospace; font-size:.88em; }
+
+  .keypoint { background:rgba(45,212,191,.08); border-left:3px solid var(--teal);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .keypoint strong { color:var(--teal); }
+  .warn     { background:rgba(251,191,36,.08); border-left:3px solid var(--yellow); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .warn     strong { color:var(--yellow); }
+  .success  { background:rgba(52,211,153,.08); border-left:3px solid var(--green);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .success  strong { color:var(--green); }
+  .danger   { background:rgba(248,113,113,.08); border-left:3px solid var(--red);   border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .danger   strong { color:var(--red); }
+  .info     { background:rgba(91,141,238,.08); border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .info     strong { color:var(--accent); }
+
+  .flow { background:var(--code-bg); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin:1.2rem 0; font-family:'JetBrains Mono',monospace; font-size:.82rem; overflow-x:auto; }
+  .flow-title { font-size:.75rem; color:var(--muted); font-family:'Inter',sans-serif; text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem; }
+
+  .analogy { background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem; margin:1rem 0; display:flex; gap:1rem; align-items:flex-start; }
+  .analogy-icon { font-size:1.5rem; flex-shrink:0; }
+  .analogy-text { font-size:.9rem; }
+  .analogy-text strong { color:#fff; }
+
+  .compare-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem; }
+  .compare-card h4 { font-size:.88rem; font-weight:600; margin-bottom:.8rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+  .compare-card.c-red    h4 { color:var(--red); }
+  .compare-card.c-green  h4 { color:var(--green); }
+  .compare-card.c-teal   h4 { color:var(--teal); }
+  .compare-card.c-yellow h4 { color:var(--yellow); }
+  .compare-card.c-blue   h4 { color:var(--accent); }
+  .compare-card ul { padding-left:1.2rem; }
+  .compare-card li { font-size:.88rem; color:var(--muted); margin-bottom:.35rem; }
+
+  table { width:100%; border-collapse:collapse; margin:1.2rem 0; font-size:.88rem; }
+  th { background:var(--code-bg); color:var(--teal); padding:.7rem 1rem; text-align:left; font-weight:600; border-bottom:2px solid var(--border); }
+  td { padding:.65rem 1rem; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(255,255,255,.02); }
+
+  /* Ring diagram using SVG */
+  .ring-container { background:var(--code-bg); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin:1.2rem 0; text-align:center; }
+  .ring-title { font-size:.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem; font-family:'Inter',sans-serif; }
+
+  /* Step cards */
+  .steps { display:flex; flex-direction:column; gap:.7rem; margin:1.2rem 0; }
+  .step-row { display:flex; align-items:flex-start; gap:1rem; background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem; }
+  .step-num { width:28px; height:28px; border-radius:50%; background:var(--teal); color:#000; display:flex; align-items:center; justify-content:center; font-size:.75rem; font-weight:700; flex-shrink:0; margin-top:.1rem; }
+  .step-content strong { color:#fff; font-size:.9rem; display:block; margin-bottom:.2rem; }
+  .step-content span   { color:var(--muted); font-size:.84rem; }
+
+  /* Formula */
+  .formula { background:linear-gradient(135deg,rgba(45,212,191,.08),rgba(91,141,238,.08)); border:1px solid rgba(45,212,191,.3); border-radius:10px; padding:1rem 1.4rem; margin:1.2rem 0; font-family:'JetBrains Mono',monospace; font-size:.9rem; text-align:center; color:#fff; }
+  .formula .label { font-family:'Inter',sans-serif; font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem; }
+
+  /* Data movement comparison */
+  .movement-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .movement-card { border-radius:12px; padding:1.2rem; border:1px solid; }
+  .movement-card.bad  { background:rgba(248,113,113,.06); border-color:rgba(248,113,113,.3); }
+  .movement-card.good { background:rgba(52,211,153,.06);  border-color:rgba(52,211,153,.3); }
+  .movement-card h4 { font-size:.88rem; font-weight:700; margin-bottom:.8rem; }
+  .movement-card.bad  h4 { color:var(--red); }
+  .movement-card.good h4 { color:var(--green); }
+  .movement-card p  { font-size:.84rem; color:var(--muted); margin:.3rem 0; }
+  .movement-card .num { font-size:1.8rem; font-weight:700; font-family:'JetBrains Mono',monospace; display:block; margin:.5rem 0; }
+  .movement-card.bad  .num { color:var(--red); }
+  .movement-card.good .num { color:var(--green); }
+
+  /* recap */
+  .recap-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .recap-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center; }
+  .recap-card .icon { font-size:1.5rem; margin-bottom:.4rem; }
+  .recap-card h4 { font-size:.85rem; font-weight:600; color:#fff; margin-bottom:.3rem; }
+  .recap-card p  { font-size:.78rem; color:var(--muted); margin:0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="tag">📓 Study Notes — Video 7</div>
+    <h1>Consistent Hashing</h1>
+    <p>Why normal hashing breaks when servers are added/removed — and how Consistent Hashing fixes it with a ring</p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 What's Inside</h2>
+    <ol>
+      <li><a href="#s1">The Problem — Distributing Data Across Servers</a></li>
+      <li><a href="#s2">Hash Functions — The Naive Approach</a></li>
+      <li><a href="#s3">The Big Problem — Adding or Removing a Server</a></li>
+      <li><a href="#s4">What is Consistent Hashing?</a></li>
+      <li><a href="#s5">The Hash Ring — How It Works</a></li>
+      <li><a href="#s6">Inserting Data Into the Ring</a></li>
+      <li><a href="#s7">Adding a Server — Minimal Data Movement</a></li>
+      <li><a href="#s8">Removing a Server — Same Idea</a></li>
+      <li><a href="#s9">The Hotspot Problem & Virtual Nodes</a></li>
+      <li><a href="#s10">Full Summary & Real-World Usage</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>The Problem — Distributing Data Across Servers</h2>
+    </div>
+
+    <p>Imagine your app has grown massively. You have millions of users and a huge amount of data. A single database can't handle all of it anymore — it becomes a <strong>bottleneck</strong>.</p>
+
+    <p>The solution is <strong>Horizontal Scaling</strong>: add more database servers and split the data across them.</p>
+
+    <div class="flow">
+      <div class="flow-title">📦 Horizontal Scaling — Splitting Data</div>
+      <pre style="color:var(--text);line-height:2">
+  Before (1 server):                After (3 servers):
+  ┌──────────────────┐     ┌──────────┐ ┌──────────┐ ┌──────────┐
+  │   DB (100% load) │  →  │  DB-0    │ │  DB-1    │ │  DB-2    │
+  │  all data here   │     │ ~33% data│ │ ~33% data│ │ ~33% data│
+  └──────────────────┘     └──────────┘ └──────────┘ └──────────┘
+
+  Problem: How do we decide which data goes to which server?
+  And more importantly — how do we FIND it again later?</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>The core challenge:</strong> You need a rule (an algorithm) that — given a piece of data — always tells you the same server to put it in AND the same server to look for it in. This rule must be <strong>consistent</strong> every time.
+    </div>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>Hash Functions — The Naive Approach</h2>
+    </div>
+
+    <p>The first idea: write a <strong>hash function</strong> that maps a user's ID to a server index.</p>
+
+    <div class="formula">
+      <div class="label">Simple Hash Function</div>
+      server_index = user_id <span style="color:var(--teal)">MOD</span> number_of_servers
+    </div>
+
+    <h3>Example with 3 Servers</h3>
+    <div class="flow">
+      <div class="flow-title">🔢 Hash Function: user_id MOD 3</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Users:       Piyush (id=1)   John (id=2)   Jane (id=3)   Alex (id=4)   Tiger (id=5)
+
+  Calculation:
+    1 MOD 3 = 1  →  Piyush's data  → DB-1
+    2 MOD 3 = 2  →  John's data    → DB-2
+    3 MOD 3 = 0  →  Jane's data    → DB-0
+    4 MOD 3 = 1  →  Alex's data    → DB-1
+    5 MOD 3 = 2  →  Tiger's data   → DB-2
+
+  ┌──────────┐   ┌──────────┐   ┌──────────┐
+  │  DB-0    │   │  DB-1    │   │  DB-2    │
+  │  Jane    │   │  Piyush  │   │  John    │
+  │          │   │  Alex    │   │  Tiger   │
+  └──────────┘   └──────────┘   └──────────┘</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>What makes a good hash function?</strong><br>
+      1. <strong>Deterministic</strong> — same input ALWAYS gives same output (never random)<br>
+      2. <strong>One-way</strong> — you can't reverse it (index 1 → can't figure out it was Piyush)<br>
+      3. <strong>Even distribution</strong> — data is spread roughly equally across servers
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🎯</div>
+      <div class="analogy-text">
+        <strong>Why NOT use random?</strong> If you store Piyush in DB-2 and later look him up, random gives you DB-0. Data is lost! The function MUST be deterministic — same input, same output, every single time.
+      </div>
+    </div>
+
+    <p>This simple approach works great... until you need to add or remove a server. That's when everything breaks.</p>
+  </div>
+
+  <!-- SECTION 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>The Big Problem — Adding or Removing a Server</h2>
+    </div>
+
+    <p>Your platform keeps growing. You now need a 4th database server. Sounds simple — just add it, right? <strong>Wrong.</strong> Adding one server changes the hash function, which breaks ALL existing data lookups.</p>
+
+    <div class="flow">
+      <div class="flow-title">💥 What Happens When You Add a 4th Server</div>
+      <pre style="color:var(--text);line-height:2.2">
+  OLD hash function: user_id MOD 3
+  NEW hash function: user_id MOD 4  ← changed!
+
+  Data is still in old positions. But lookups use new function:
+
+  Jane  (id=3): OLD → 3 MOD 3 = 0 → was in DB-0 ✅
+                NEW → 3 MOD 4 = 3 → looks in DB-3 ❌ NOT THERE!
+
+  Alex  (id=4): OLD → 4 MOD 3 = 1 → was in DB-1 ✅
+                NEW → 4 MOD 4 = 0 → looks in DB-0 ❌ NOT THERE!
+
+  Tiger (id=5): OLD → 5 MOD 3 = 2 → was in DB-2 ✅
+                NEW → 5 MOD 4 = 1 → looks in DB-1 ❌ NOT THERE!
+
+  John  (id=2): OLD → 2 MOD 3 = 2 → was in DB-2 ✅
+                NEW → 2 MOD 4 = 2 → looks in DB-2 ✅ (lucky!)
+
+  Result: 3 out of 5 users can't find their data! 💥</pre>
+    </div>
+
+    <div class="movement-grid">
+      <div class="movement-card bad">
+        <h4>❌ Simple Hashing (MOD n)</h4>
+        <span class="num">~75%</span>
+        <p>of all keys need to be moved when adding/removing a server</p>
+        <p>With 5 million records → move ~3.75 million records</p>
+        <p>System downtime, data inconsistency, massive I/O cost</p>
+      </div>
+      <div class="movement-card good">
+        <h4>✅ Consistent Hashing</h4>
+        <span class="num">~1/n</span>
+        <p>of keys need to move when adding/removing a server</p>
+        <p>With 5 million records → move only ~1.25 million records</p>
+        <p>Minimal disruption, no downtime, efficient</p>
+      </div>
+    </div>
+
+    <div class="danger">
+      <strong>❌ The root problem with simple hashing:</strong> The formula <code>user_id MOD n</code> depends on <code>n</code> (number of servers). Change <code>n</code>, and the formula changes for ALL data. You have to reshuffle almost everything.
+    </div>
+  </div>
+
+  <!-- SECTION 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>What is Consistent Hashing?</h2>
+    </div>
+
+    <div class="keypoint">
+      <strong>Consistent Hashing</strong> = A technique that maps both servers AND data onto a ring (circle). Data is assigned to the nearest server going clockwise. When a server is added or removed, only the data between that server and its predecessor needs to move — everything else stays.
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>❌ Simple Hashing</h4>
+        <ul>
+          <li>Formula: key MOD n</li>
+          <li>All data mapped to a server directly</li>
+          <li>Depends on n (number of servers)</li>
+          <li>Change n → remap almost everything</li>
+          <li>Massive data movement on scale up/down</li>
+        </ul>
+      </div>
+      <div class="compare-card c-teal">
+        <h4>✅ Consistent Hashing</h4>
+        <ul>
+          <li>Both servers AND data on a ring</li>
+          <li>Data goes to nearest server clockwise</li>
+          <li>Adding a server only affects nearby keys</li>
+          <li>Removing only affects that server's keys</li>
+          <li>Minimal data movement — only a fraction</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="info">
+      <strong>Used by real systems:</strong> Amazon DynamoDB, Apache Cassandra, Discord's chat service, and many distributed databases use Consistent Hashing to distribute data across nodes efficiently.
+    </div>
+  </div>
+
+  <!-- SECTION 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>The Hash Ring — How It Works</h2>
+    </div>
+
+    <p>The core idea: imagine a clock. The hash function maps everything to a number between 1 and 12 (or in real systems, 0 to 2³² - 1). Arrange those numbers in a circle — that's the <strong>Hash Ring</strong>.</p>
+
+    <div class="ring-container">
+      <div class="ring-title">🔄 The Hash Ring — Placing 3 Servers</div>
+      <svg viewBox="0 0 400 400" width="360" height="360" xmlns="http://www.w3.org/2000/svg">
+        <!-- Ring -->
+        <circle cx="200" cy="200" r="150" fill="none" stroke="#2d3148" stroke-width="2"/>
+        <!-- Clock numbers -->
+        <text x="200" y="42"  text-anchor="middle" fill="#8892a4" font-size="13" font-family="JetBrains Mono,monospace">12</text>
+        <text x="358" y="207" text-anchor="middle" fill="#8892a4" font-size="13" font-family="JetBrains Mono,monospace">3</text>
+        <text x="200" y="368" text-anchor="middle" fill="#8892a4" font-size="13" font-family="JetBrains Mono,monospace">6</text>
+        <text x="42"  y="207" text-anchor="middle" fill="#8892a4" font-size="13" font-family="JetBrains Mono,monospace">9</text>
+        <text x="310" y="90"  text-anchor="middle" fill="#8892a4" font-size="11" font-family="JetBrains Mono,monospace">2</text>
+        <text x="310" y="322" text-anchor="middle" fill="#8892a4" font-size="11" font-family="JetBrains Mono,monospace">5</text>
+        <text x="90"  y="322" text-anchor="middle" fill="#8892a4" font-size="11" font-family="JetBrains Mono,monospace">7</text>
+        <!-- Server 1 at position 9 (left) -->
+        <circle cx="50" cy="200" r="22" fill="#1a1d27" stroke="#2dd4bf" stroke-width="2"/>
+        <text x="50" y="196" text-anchor="middle" fill="#2dd4bf" font-size="10" font-weight="bold" font-family="Inter,sans-serif">S-0</text>
+        <text x="50" y="208" text-anchor="middle" fill="#2dd4bf" font-size="9" font-family="JetBrains Mono,monospace">pos:9</text>
+        <!-- Server 2 at position 2 (top-right) -->
+        <circle cx="327" cy="82" r="22" fill="#1a1d27" stroke="#2dd4bf" stroke-width="2"/>
+        <text x="327" y="78" text-anchor="middle" fill="#2dd4bf" font-size="10" font-weight="bold" font-family="Inter,sans-serif">S-1</text>
+        <text x="327" y="90" text-anchor="middle" fill="#2dd4bf" font-size="9" font-family="JetBrains Mono,monospace">pos:2</text>
+        <!-- Server 3 at position 5 (bottom-right) -->
+        <circle cx="327" cy="318" r="22" fill="#1a1d27" stroke="#2dd4bf" stroke-width="2"/>
+        <text x="327" y="314" text-anchor="middle" fill="#2dd4bf" font-size="10" font-weight="bold" font-family="Inter,sans-serif">S-2</text>
+        <text x="327" y="326" text-anchor="middle" fill="#2dd4bf" font-size="9" font-family="JetBrains Mono,monospace">pos:5</text>
+        <!-- Data points -->
+        <circle cx="200" cy="52"  r="10" fill="#1e2130" stroke="#fbbf24" stroke-width="2"/>
+        <text x="200" y="56" text-anchor="middle" fill="#fbbf24" font-size="9" font-family="JetBrains Mono,monospace">D1</text>
+        <circle cx="162" cy="57"  r="10" fill="#1e2130" stroke="#fbbf24" stroke-width="2"/>
+        <text x="162" y="61" text-anchor="middle" fill="#fbbf24" font-size="9" font-family="JetBrains Mono,monospace">D2</text>
+        <circle cx="282" cy="126" r="10" fill="#1e2130" stroke="#fbbf24" stroke-width="2"/>
+        <text x="282" y="130" text-anchor="middle" fill="#fbbf24" font-size="9" font-family="JetBrains Mono,monospace">D3</text>
+        <circle cx="88"  cy="126" r="10" fill="#1e2130" stroke="#fbbf24" stroke-width="2"/>
+        <text x="88"  y="130" text-anchor="middle" fill="#fbbf24" font-size="9" font-family="JetBrains Mono,monospace">D4</text>
+        <!-- Clockwise arrow -->
+        <path d="M 200 52 A 148 148 0 0 1 348 200" fill="none" stroke="#2d3148" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+        <defs>
+          <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#2d3148"/>
+          </marker>
+        </defs>
+        <!-- Legend -->
+        <circle cx="30" cy="360" r="7" fill="#1a1d27" stroke="#2dd4bf" stroke-width="2"/>
+        <text x="42" y="364" fill="#8892a4" font-size="11" font-family="Inter,sans-serif">Server</text>
+        <circle cx="110" cy="360" r="7" fill="#1e2130" stroke="#fbbf24" stroke-width="2"/>
+        <text x="122" y="364" fill="#8892a4" font-size="11" font-family="Inter,sans-serif">Data</text>
+        <text x="200" y="395" text-anchor="middle" fill="#8892a4" font-size="10" font-family="Inter,sans-serif">Always go CLOCKWISE to find a server →</text>
+      </svg>
+    </div>
+
+    <h3>How the Ring is Built — Step by Step</h3>
+    <div class="steps">
+      <div class="step-row">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Create the ring</strong>
+          <span>The hash function maps values to a range (e.g. 1–12, like a clock). Arrange these numbers in a circle.</span>
+        </div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Place servers on the ring</strong>
+          <span>Each server has an IP address or identifier. Feed it through the hash function. Place the server at the number it returns. Example: Server-0 → hash → 9, Server-1 → hash → 2, Server-2 → hash → 5.</span>
+        </div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Place data on the ring</strong>
+          <span>Each piece of data (e.g. user ID) also goes through the hash function. It lands somewhere on the ring too.</span>
+        </div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <strong>Find the server — go CLOCKWISE</strong>
+          <span>From where the data lands on the ring, move clockwise until you hit the first server. That's the server that stores this data.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>Inserting Data Into the Ring</h2>
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">📥 How Data is Stored in Consistent Hashing</div>
+      <pre style="color:var(--text);line-height:2.3">
+  Ring positions: 1–12 (like a clock)
+  Servers:  S-0 at pos 9 | S-1 at pos 2 | S-2 at pos 5
+
+  Data item 1 → hash → lands at position 1
+    Go clockwise from 1... next server = S-1 (at 2)
+    → Store in S-1 ✅
+
+  Data item 2 → hash → lands at position 6
+    Go clockwise from 6... next server = S-0 (at 9)
+    → Store in S-0 ✅
+
+  Data item 3 → hash → lands at position 3
+    Go clockwise from 3... next server = S-2 (at 5)
+    → Store in S-2 ✅
+
+  Data item 4 → hash → lands at position 10
+    Go clockwise from 10... past 11, 12, 1, 2... next server = S-1 (at 2)
+    Wait — from 10 clockwise, we first hit S-1 at pos 2? No.
+    From 10 clockwise: 11→12→1→2 = S-1
+    → Store in S-1 ✅</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>The lookup rule (always same):</strong><br>
+      1. Hash the key → get a position on the ring<br>
+      2. Go <strong>clockwise</strong> from that position<br>
+      3. First server you hit → that's where the data lives<br><br>
+      This same rule is used for both <strong>inserting</strong> and <strong>reading</strong> data. Guaranteed to always find the same server!
+    </div>
+  </div>
+
+  <!-- SECTION 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>Adding a Server — Minimal Data Movement</h2>
+    </div>
+
+    <p>Here's where Consistent Hashing shines. Let's add a new server <strong>S-3</strong> which hashes to position <strong>12</strong>.</p>
+
+    <div class="flow">
+      <div class="flow-title">➕ Adding Server S-3 at Position 12</div>
+      <pre style="color:var(--text);line-height:2.2">
+  BEFORE (ring): S-1(2) → S-2(5) → S-0(9) → [back to S-1]
+
+  New server S-3 added at position 12:
+  AFTER  (ring): S-1(2) → S-2(5) → S-0(9) → S-3(12) → [back to S-1]
+
+  Which data needs to move?
+  ┌──────────────────────────────────────────────────────┐
+  │ Only data that was between position 9 and 12!        │
+  │ (that data used to go to S-1, now goes to S-3)       │
+  │                                                       │
+  │ Data at positions 1,2,3,4,5,6,7,8 → NOT affected ✅  │
+  │ Data at positions 10,11,12 → move from S-1 → S-3 📦  │
+  └──────────────────────────────────────────────────────┘
+
+  In a system with 5 million keys:
+  Simple hashing  → ~3.75 million keys need to move ❌
+  Consistent hash → only ~417,000 keys move (≈1/12 of total) ✅</pre>
+    </div>
+
+    <div class="success">
+      <strong>✅ Why only keys between prev server and new server move:</strong><br>
+      Those keys were previously "claimed" by the first server clockwise (which was S-1 past position 9). Now that S-3 is between them, those keys find S-3 first. All other keys still find the same server they did before — nothing else changes!
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🏘️</div>
+      <div class="analogy-text">
+        <strong>Neighbourhood analogy:</strong> Imagine the ring is a road in a circle. Servers are post offices. Each house sends mail to the nearest post office clockwise. You open a NEW post office — only the houses between the old and new post office need to change where they send mail. All other houses are unaffected.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 8 -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>Removing a Server — Same Idea</h2>
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">➖ Removing Server S-2 (position 5)</div>
+      <pre style="color:var(--text);line-height:2.2">
+  BEFORE: S-1(2) → S-2(5) → S-0(9) → S-3(12) → [back]
+
+  S-2 crashes / is removed:
+  AFTER:  S-1(2) → S-0(9) → S-3(12) → [back to S-1]
+
+  Which data needs to move?
+  ┌──────────────────────────────────────────────────────┐
+  │ Only the data that WAS stored in S-2!                │
+  │ (data at positions 3, 4, 5 — between S-1 and S-2)   │
+  │ These now go clockwise to S-0 (next available)       │
+  │                                                       │
+  │ Data in S-0, S-1, S-3 → NOT affected ✅              │
+  │ Data in S-2 → redistributed to S-0 (clockwise) 📦   │
+  └──────────────────────────────────────────────────────┘</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>How to find affected keys when removing a server:</strong><br>
+      Go <strong>anti-clockwise</strong> from the removed server until you hit the previous server. All keys in that range need to be redistributed to the next server clockwise. Easy to calculate, minimal in scope.
+    </div>
+  </div>
+
+  <!-- SECTION 9 -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2>The Hotspot Problem & Virtual Nodes</h2>
+    </div>
+
+    <p>There's one remaining problem with basic Consistent Hashing. If the hash function places servers unevenly on the ring, one server ends up with a much larger slice of the ring — and therefore much more data.</p>
+
+    <div class="flow">
+      <div class="flow-title">⚠️ Uneven Server Placement = Hotspot</div>
+      <pre style="color:var(--text);line-height:2">
+  Ring:
+  S-0 at position 1
+  S-1 at position 3   ← very close to S-0!
+  S-2 at position 8
+
+  Result:
+  S-0 handles keys from 8 → 1  (small slice, ~25% of ring)
+  S-1 handles keys from 1 → 3  (tiny slice, ~17% of ring)
+  S-2 handles keys from 3 → 8  (HUGE slice, ~58% of ring) ← HOTSPOT!
+
+  S-2 gets more than 2× the traffic of the others! 💥</pre>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ Hotspot problem:</strong> When servers cluster together on the ring, one server gets assigned a disproportionately large portion and becomes overloaded while others are idle.
+    </div>
+
+    <h3>Solution: Virtual Nodes</h3>
+
+    <div class="keypoint">
+      <strong>Virtual Nodes</strong> = Instead of placing each server at ONE point on the ring, place it at <strong>multiple points</strong>. Each "virtual node" is just a pointer to the real server. This distributes load far more evenly.
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">✅ Virtual Nodes — Even Load Distribution</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Without Virtual Nodes:
+  Ring: ... S-2 ... S-2 gets huge chunk ...
+
+  With Virtual Nodes (3 virtual nodes per server):
+  S-0 real server at 1, virtual copies at 5, 9
+  S-1 real server at 3, virtual copies at 7, 11
+  S-2 real server at 8, virtual copies at 2, 12
+
+  Ring: S-0(1) → S-1(3) → S-0v(5) → S-1v(7) → S-2(8) → S-0v(9) → S-1v(11) → S-2v(12) → ...
+
+  Result: Every server handles multiple small slices
+  → Load is distributed much more evenly across real servers ✅</pre>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>❌ Without Virtual Nodes</h4>
+        <ul>
+          <li>Each server = 1 point on ring</li>
+          <li>Uneven hash can create huge slices</li>
+          <li>One server becomes overloaded (hotspot)</li>
+          <li>Others are underutilized — wasted resources</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>✅ With Virtual Nodes</h4>
+        <ul>
+          <li>Each server = multiple points on ring</li>
+          <li>Slices are smaller and more evenly spread</li>
+          <li>Even if one cluster has bad luck, others compensate</li>
+          <li>Standard practice in production systems</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🏪</div>
+      <div class="analogy-text">
+        <strong>Virtual Nodes analogy:</strong> Imagine a city with 3 supermarkets. If all 3 are in one corner, all customers from the other side travel far. But if each supermarket opens 2 extra <em>branches</em> around the city, everyone has a nearby store. Virtual nodes are like those branches — same supermarket, just more locations.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 10 -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2>Full Summary & Real-World Usage</h2>
+    </div>
+
+    <h3>The Full Journey — From Problem to Solution</h3>
+    <div class="steps">
+      <div class="step-row">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Problem: Single DB is a bottleneck</strong>
+          <span>Too much data for one server → horizontal scaling → need to split data across multiple servers.</span>
+        </div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Naive fix: user_id MOD n</strong>
+          <span>Works until you add/remove a server. Changing n reshuffles almost ALL data — massive, disruptive data movement.</span>
+        </div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Better fix: Consistent Hashing with a Ring</strong>
+          <span>Map both servers and data onto a ring. Data finds its server by going clockwise. Only keys between two servers are affected when one is added/removed.</span>
+        </div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <strong>Refinement: Virtual Nodes</strong>
+          <span>Each server sits at multiple positions on the ring, ensuring even load distribution even when the hash function places real servers unevenly.</span>
+        </div>
+      </div>
+    </div>
+
+    <h3>Key Concepts at a Glance</h3>
+    <table>
+      <thead><tr><th>Concept</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Hash Function</strong></td><td>Takes an input (user ID, server IP) and returns a deterministic, fixed-range number. Same input → always same output.</td></tr>
+        <tr><td><strong>Deterministic</strong></td><td>Same input always produces the same output. Without this, you could never reliably find your data again.</td></tr>
+        <tr><td><strong>Hash Ring</strong></td><td>A circle of hash values (like a clock). Both servers and data are placed on this ring.</td></tr>
+        <tr><td><strong>Clockwise lookup</strong></td><td>From data's ring position, go clockwise to find its server. Used for both reads and writes.</td></tr>
+        <tr><td><strong>Minimal redistribution</strong></td><td>Adding/removing a server only moves keys in the affected arc — not the whole dataset.</td></tr>
+        <tr><td><strong>Virtual Nodes</strong></td><td>Each real server has multiple positions on the ring to ensure even load distribution.</td></tr>
+        <tr><td><strong>Hotspot</strong></td><td>When one server gets overloaded because it owns a disproportionately large arc of the ring.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Consistent Hashing vs Simple Hashing</h3>
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>❌ Simple Hashing (key MOD n)</h4>
+        <ul>
+          <li>Formula changes when n changes</li>
+          <li>Add 1 server → reshuffle ~75% of all data</li>
+          <li>Remove 1 server → same massive reshuffle</li>
+          <li>Works fine at fixed, small scale</li>
+          <li>Not suitable for dynamic scaling</li>
+        </ul>
+      </div>
+      <div class="compare-card c-teal">
+        <h4>✅ Consistent Hashing (ring)</h4>
+        <ul>
+          <li>Formula is independent of server count</li>
+          <li>Add 1 server → move only ~1/n keys</li>
+          <li>Remove 1 server → only that server's keys move</li>
+          <li>Scales dynamically with minimal disruption</li>
+          <li>Industry standard for distributed systems</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>📖 Quick Recap Cards</h3>
+    <div class="recap-grid">
+      <div class="recap-card">
+        <div class="icon">🔢</div>
+        <h4>Hash Function</h4>
+        <p>Takes input → returns fixed, deterministic output. One-way, consistent, evenly distributed.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">💍</div>
+        <h4>Hash Ring</h4>
+        <p>A circle where both servers and data are placed based on their hash values.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🕐</div>
+        <h4>Clockwise Rule</h4>
+        <p>From any data point, go clockwise on the ring to find the responsible server.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📦</div>
+        <h4>Minimal Movement</h4>
+        <p>Adding/removing a server only moves the keys in the arc between two adjacent servers.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">👻</div>
+        <h4>Virtual Nodes</h4>
+        <p>Each real server = multiple ring positions. Solves uneven load / hotspot problems.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🌶️</div>
+        <h4>Hotspot Problem</h4>
+        <p>When one server owns a huge ring arc and gets overloaded. Fixed by virtual nodes.</p>
+      </div>
+    </div>
+
+    <h3>Real-World Systems That Use Consistent Hashing</h3>
+    <table>
+      <thead><tr><th>System</th><th>How It Uses Consistent Hashing</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Amazon DynamoDB</strong></td><td>Distributes data partitions across nodes dynamically as the cluster scales</td></tr>
+        <tr><td><strong>Apache Cassandra</strong></td><td>Uses a ring-based token assignment to distribute rows across nodes</td></tr>
+        <tr><td><strong>Discord</strong></td><td>Routes chat messages to the appropriate shard/server based on guild ID</td></tr>
+        <tr><td><strong>CDN Networks</strong></td><td>Routes users to the nearest/correct cache server consistently</td></tr>
+        <tr><td><strong>Redis Cluster</strong></td><td>Divides key space into slots distributed across nodes using consistent hashing</td></tr>
+      </tbody>
+    </table>
+
+    <div class="info">
+      <strong>📌 Coming up (teased in the video):</strong> The instructor mentioned the <strong>Celebrity / Hotspot Problem</strong> — when one famous user (like a celebrity on Twitter) has so much data/traffic that even a perfect hash sends huge load to one server. This is a separate, interesting problem to look forward to in a future video!
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:.85rem;">
+    📼 Video 7 of the System Design Playlist &nbsp;|&nbsp;
+    Connects to: Part 1 (horizontal scaling) · Back of Envelope (how much data per server)
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design – Rate Limiting Notes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --card2: #1e2130; --border: #2d3148;
+    --accent: #5b8dee; --accent2: #a78bfa; --green: #34d399; --yellow: #fbbf24;
+    --red: #f87171; --orange: #fb923c; --teal: #2dd4bf; --pink: #f472b6;
+    --text: #e2e8f0; --muted: #8892a4; --code-bg: #13161f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; padding: 2rem 1rem; }
+  .container { max-width: 880px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    text-align: center; padding: 2.5rem 2rem;
+    background: linear-gradient(135deg, #1a1d27, #1e2130);
+    border: 1px solid var(--border); border-radius: 16px; margin-bottom: 2rem;
+    position: relative; overflow: hidden;
+  }
+  .header::before {
+    content:''; position:absolute; top:-60px; right:-60px; width:200px; height:200px;
+    background: radial-gradient(circle, rgba(248,113,113,0.15) 0%, transparent 70%); border-radius:50%;
+  }
+  .header .tag {
+    display:inline-block; background:rgba(248,113,113,0.15); color:var(--red);
+    font-size:.75rem; font-weight:600; letter-spacing:.08em; padding:.3rem .9rem;
+    border-radius:20px; border:1px solid rgba(248,113,113,0.3); margin-bottom:1rem; text-transform:uppercase;
+  }
+  .header h1 { font-size:2rem; font-weight:700; color:#fff; margin-bottom:.5rem; }
+  .header p  { color:var(--muted); font-size:.95rem; }
+
+  /* TOC */
+  .toc { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin-bottom:2rem; }
+  .toc h2 { font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:1rem; }
+  .toc ol { padding-left:1.4rem; }
+  .toc li { margin-bottom:.4rem; }
+  .toc a  { color:var(--red); text-decoration:none; font-size:.93rem; }
+  .toc a:hover { text-decoration:underline; }
+
+  /* Section */
+  .section { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:2rem; margin-bottom:1.5rem; }
+  .section-header { display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+  .section-num {
+    width:36px; height:36px; background:linear-gradient(135deg, var(--red), var(--orange));
+    border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.9rem; color:#fff; flex-shrink:0;
+  }
+  .section h2 { font-size:1.25rem; font-weight:700; color:#fff; }
+  h3 { font-size:1rem; font-weight:600; color:#fff; margin:1.4rem 0 .7rem; }
+  p  { margin-bottom:1rem; color:var(--text); font-size:.96rem; }
+  p:last-child { margin-bottom:0; }
+  code { background:var(--code-bg); padding:.1rem .4rem; border-radius:4px; color:var(--red); font-family:'JetBrains Mono',monospace; font-size:.88em; }
+
+  /* Callouts */
+  .keypoint { background:rgba(248,113,113,.08); border-left:3px solid var(--red);    border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .keypoint strong { color:var(--red); }
+  .success  { background:rgba(52,211,153,.08);  border-left:3px solid var(--green);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .success  strong { color:var(--green); }
+  .warn     { background:rgba(251,191,36,.08);  border-left:3px solid var(--yellow); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .warn     strong { color:var(--yellow); }
+  .info     { background:rgba(91,141,238,.08);  border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .info     strong { color:var(--accent); }
+
+  /* Flow */
+  .flow { background:var(--code-bg); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin:1.2rem 0; font-family:'JetBrains Mono',monospace; font-size:.82rem; overflow-x:auto; }
+  .flow-title { font-size:.75rem; color:var(--muted); font-family:'Inter',sans-serif; text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem; }
+
+  /* Analogy */
+  .analogy { background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem; margin:1rem 0; display:flex; gap:1rem; align-items:flex-start; }
+  .analogy-icon { font-size:1.5rem; flex-shrink:0; }
+  .analogy-text { font-size:.9rem; }
+  .analogy-text strong { color:#fff; }
+
+  /* Compare */
+  .compare-grid   { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem; }
+  .compare-card h4 { font-size:.88rem; font-weight:600; margin-bottom:.8rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+  .compare-card.c-green  h4 { color:var(--green); }
+  .compare-card.c-red    h4 { color:var(--red); }
+  .compare-card.c-blue   h4 { color:var(--accent); }
+  .compare-card.c-orange h4 { color:var(--orange); }
+  .compare-card.c-purple h4 { color:var(--accent2); }
+  .compare-card.c-teal   h4 { color:var(--teal); }
+  .compare-card ul { padding-left:1.2rem; }
+  .compare-card li { font-size:.88rem; color:var(--muted); margin-bottom:.35rem; }
+
+  table { width:100%; border-collapse:collapse; margin:1.2rem 0; font-size:.88rem; }
+  th { background:var(--code-bg); color:var(--red); padding:.7rem 1rem; text-align:left; font-weight:600; border-bottom:2px solid var(--border); }
+  td { padding:.65rem 1rem; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(255,255,255,.02); }
+
+  /* Algorithm card */
+  .algo-card {
+    border: 1px solid var(--border); border-radius:14px; overflow:hidden; margin:1.5rem 0;
+  }
+  .algo-header {
+    padding:1rem 1.4rem; display:flex; align-items:center; gap:1rem;
+  }
+  .algo-icon { font-size:1.8rem; flex-shrink:0; }
+  .algo-title { }
+  .algo-title h3 { margin:0 0 .15rem; font-size:1.05rem; }
+  .algo-title p  { margin:0; font-size:.82rem; color:var(--muted); }
+  .algo-body { padding:1.2rem 1.4rem; background:var(--code-bg); }
+  .algo-body p { font-size:.88rem; }
+
+  .h-token  .algo-header { background:rgba(251,191,36,.07); border-bottom:1px solid rgba(251,191,36,.2); }
+  .h-token  .algo-header h3 { color:var(--yellow); }
+  .h-leaky  .algo-header { background:rgba(91,141,238,.07); border-bottom:1px solid rgba(91,141,238,.2); }
+  .h-leaky  .algo-header h3 { color:var(--accent); }
+  .h-fixed  .algo-header { background:rgba(251,146,60,.07); border-bottom:1px solid rgba(251,146,60,.2); }
+  .h-fixed  .algo-header h3 { color:var(--orange); }
+  .h-swlog  .algo-header { background:rgba(52,211,153,.07); border-bottom:1px solid rgba(52,211,153,.2); }
+  .h-swlog  .algo-header h3 { color:var(--green); }
+  .h-swcnt  .algo-header { background:rgba(167,139,250,.07); border-bottom:1px solid rgba(167,139,250,.2); }
+  .h-swcnt  .algo-header h3 { color:var(--accent2); }
+
+  /* Timeline visual */
+  .timeline-vis {
+    background:var(--code-bg); border:1px solid var(--border);
+    border-radius:12px; padding:1.4rem; margin:1.2rem 0; overflow-x:auto;
+  }
+  .timeline-vis .tv-title { font-size:.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem; font-family:'Inter',sans-serif; }
+  .tv-row { display:flex; align-items:center; gap:.4rem; margin-bottom:.5rem; font-family:'JetBrains Mono',monospace; font-size:.78rem; }
+  .tv-label { width:80px; color:var(--muted); flex-shrink:0; }
+  .tv-window { display:flex; gap:.25rem; }
+  .tv-cell {
+    width:44px; height:32px; border-radius:6px; display:flex; align-items:center;
+    justify-content:center; font-size:.75rem; font-weight:700; border:1px solid;
+  }
+  .cell-allow  { border-color:var(--green);  background:rgba(52,211,153,.15); color:var(--green); }
+  .cell-deny   { border-color:var(--red);    background:rgba(248,113,113,.15); color:var(--red); }
+  .cell-empty  { border-color:var(--border); background:transparent;           color:var(--muted); }
+  .cell-active { border-color:var(--yellow); background:rgba(251,191,36,.1);  color:var(--yellow); }
+  .tv-note { font-size:.75rem; color:var(--muted); margin-left:.4rem; }
+
+  /* Pros cons */
+  .pros-cons { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; margin:1rem 0; }
+  .pros, .cons { background:var(--card2); border:1px solid var(--border); border-radius:9px; padding:1rem; }
+  .pros h4 { color:var(--green); font-size:.82rem; margin-bottom:.5rem; padding-bottom:.4rem; border-bottom:1px solid var(--border); }
+  .cons h4 { color:var(--red);   font-size:.82rem; margin-bottom:.5rem; padding-bottom:.4rem; border-bottom:1px solid var(--border); }
+  .pros li, .cons li { font-size:.82rem; color:var(--muted); margin-bottom:.3rem; list-style:none; }
+  .pros li::before { content:'✅ '; }
+  .cons li::before { content:'❌ '; }
+
+  /* Big formula */
+  .formula {
+    background:linear-gradient(135deg, rgba(248,113,113,.08), rgba(251,146,60,.08));
+    border:1px solid rgba(248,113,113,.3); border-radius:10px; padding:1rem 1.4rem;
+    margin:1.2rem 0; font-family:'JetBrains Mono',monospace; font-size:.9rem; text-align:center; color:#fff;
+  }
+  .formula .label { font-family:'Inter',sans-serif; font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem; }
+
+  /* recap grid */
+  .recap-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .recap-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center; }
+  .recap-card .icon { font-size:1.5rem; margin-bottom:.4rem; }
+  .recap-card h4 { font-size:.85rem; font-weight:600; color:#fff; margin-bottom:.3rem; }
+  .recap-card p  { font-size:.78rem; color:var(--muted); margin:0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="tag">📓 Study Notes — Video 6</div>
+    <h1>Master Rate Limiting</h1>
+    <p>What rate limiting is, why it's needed, and all 5 algorithms explained with diagrams</p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 What's Inside</h2>
+    <ol>
+      <li><a href="#s1">What is Rate Limiting?</a></li>
+      <li><a href="#s2">How a Rate Limiter Works (High Level)</a></li>
+      <li><a href="#s3">Algorithm 1 — Token Bucket</a></li>
+      <li><a href="#s4">Algorithm 2 — Leaky Bucket</a></li>
+      <li><a href="#s5">Algorithm 3 — Fixed Window Counter</a></li>
+      <li><a href="#s6">Algorithm 4 — Sliding Window Log</a></li>
+      <li><a href="#s7">Algorithm 5 — Sliding Window Counter (Hybrid)</a></li>
+      <li><a href="#s8">Full Comparison Table & Summary</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>What is Rate Limiting?</h2>
+    </div>
+
+    <p>Every server is just a machine — it has a CPU, RAM, and a hard limit on how many requests it can handle. If too many requests come in, the server <strong>overheats, slows down, and eventually crashes</strong>.</p>
+
+    <div class="flow">
+      <div class="flow-title">🖥️ Server Capacity Example</div>
+      <pre style="color:var(--text);line-height:2">
+  Server: 2 vCPU, 4 GB RAM
+  Comfortable limit: 100 requests/minute
+  Risky zone:        150 requests/minute (performance issues)
+  Crash zone:        200+ requests/minute (definite crash)
+
+  These aren't hard cutoffs — they're approximations.
+  100 rpm = "safe side". 101 won't instantly crash it.
+  But consistently over 150 → problems guaranteed.</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>Rate Limiting</strong> = A layer in your system that controls how many requests are allowed through in a given time window. If a user exceeds the limit, their request is <strong>rejected</strong> with HTTP status code <code>429 Too Many Requests</code>.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🚿</div>
+      <div class="analogy-text">
+        <strong>Shower analogy:</strong> Your overhead tank has 1500 litres. If you open it directly, the water pressure would knock you over! The shower pipe and head control the flow — they let water out at a safe, comfortable rate. A rate limiter does the exact same thing for your server.
+      </div>
+    </div>
+
+    <h3>Why Rate Limiting?</h3>
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>❌ Without Rate Limiting</h4>
+        <ul>
+          <li>One abusive user can crash your server</li>
+          <li>DDoS attacks bring the whole system down</li>
+          <li>Costs explode (cloud bills scale with load)</li>
+          <li>All users suffer when one user misbehaves</li>
+          <li>No protection against bot traffic</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>✅ With Rate Limiting</h4>
+        <ul>
+          <li>Server stays healthy under any traffic</li>
+          <li>Fair usage — no single user hogs resources</li>
+          <li>DDoS protection at the API layer</li>
+          <li>Cost control — scale only for legit traffic</li>
+          <li>Used by Amazon, Stripe, GitHub APIs</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>How a Rate Limiter Works (High Level)</h2>
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">🔄 Rate Limiter Request Flow</div>
+      <pre style="color:var(--text);line-height:2.2">
+  User makes a request
+          │
+          ▼
+  ┌─────────────────────┐
+  │    Rate Limiter     │  ← Sits between user and server
+  │  Config: 100 req/min│
+  └──────────┬──────────┘
+             │
+      ┌──────┴──────────────────┐
+      │  Check: Are we within   │
+      │  the limit right now?   │
+      └──────┬──────────────────┘
+             │
+     ┌───────┴────────────┐
+     │YES: Under limit     │NO: Over limit
+     ▼                    ▼
+  Forward to Server     Return 429
+  → Process request     "Too Many Requests"
+  → Send response       → Drop request
+                        → User must retry later</pre>
+    </div>
+
+    <div class="formula">
+      <div class="label">HTTP Response for Rate Limited Request</div>
+      429 Too Many Requests — "Come back later, I'm busy!"
+    </div>
+
+    <p>The rate limiter is configured with a <strong>policy</strong> (e.g. 100 requests per minute). Every incoming request is checked against this policy before it ever reaches the server. If the limit is exceeded, the request is dropped right at the limiter — the server never even sees it.</p>
+
+    <p>Now the big question: <strong>how does the rate limiter count requests and decide when to drop?</strong> There are 5 algorithms for this.</p>
+  </div>
+
+  <!-- SECTION 3 — TOKEN BUCKET -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>Algorithm 1 — Token Bucket</h2>
+    </div>
+
+    <div class="algo-card h-token">
+      <div class="algo-header">
+        <div class="algo-icon">🪣</div>
+        <div class="algo-title">
+          <h3>Token Bucket Algorithm</h3>
+          <p>Most popular • Used by Amazon & Stripe • Memory efficient</p>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p>A bucket holds tokens. Every request consumes one token. A background refiller continuously adds tokens at a fixed rate. No tokens = request dropped.</p>
+      </div>
+    </div>
+
+    <h3>How It Works — Step by Step</h3>
+    <div class="flow">
+      <div class="flow-title">🪣 Token Bucket — Example (Capacity=5, Refill=3/sec)</div>
+      <pre style="color:var(--text);line-height:2.3">
+  Bucket capacity: 5 tokens
+  Refill rate:     3 tokens per second
+  Start:           Bucket is empty
+
+  ┌─────────────────────────────────────────────────────┐
+  │ Second 1: Refiller adds 3 tokens → [●●●○○] (3/5)   │
+  │                                                     │
+  │ Request 1 comes in → Take 1 token → [●●○○○] (2/5)  │
+  │                    → ✅ ALLOWED                      │
+  │ Request 2 comes in → Take 1 token → [●○○○○] (1/5)  │
+  │                    → ✅ ALLOWED                      │
+  │ Request 3 comes in → Take 1 token → [○○○○○] (0/5)  │
+  │                    → ✅ ALLOWED                      │
+  │ Request 4 comes in → No tokens!                     │
+  │                    → ❌ REJECTED (429)               │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────┐
+  │ Second 2: Refiller adds 3 tokens → [●●●○○] (3/5)   │
+  │ Request 4 retries → Token available → ✅ ALLOWED    │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────┐
+  │ Second 3: No requests → Refiller tries to add 3    │
+  │ But bucket is already at 3 → adds to 5 (max = 5)   │
+  │ → [●●●●●] (5/5) — bucket never exceeds capacity    │
+  └─────────────────────────────────────────────────────┘</pre>
+    </div>
+
+    <div class="pros-cons">
+      <div class="pros">
+        <h4>✅ Pros</h4>
+        <li>Simple to understand and implement</li>
+        <li>Memory efficient</li>
+        <li>Allows short bursts of traffic</li>
+        <li>Used widely in production (Amazon, Stripe)</li>
+      </div>
+      <div class="cons">
+        <h4>❌ Cons</h4>
+        <li>Two parameters to tune: bucket size + refill rate</li>
+        <li>Tuning them correctly for production is tricky</li>
+        <li>Wrong tuning = too strict or too lenient</li>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>Two parameters to remember:</strong><br>
+      1. <strong>Bucket Size (Capacity)</strong> — max tokens the bucket can hold<br>
+      2. <strong>Refill Rate</strong> — how many tokens are added per second/minute<br>
+      Both must be tuned to match your server's actual capacity.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🎫</div>
+      <div class="analogy-text">
+        <strong>Think of it like concert tickets:</strong> The venue gives out 3 tickets every second (refill rate). Max 5 tickets in the pool at any time (capacity). Each person needs 1 ticket to enter (1 token per request). No tickets = you wait outside.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 4 — LEAKY BUCKET -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>Algorithm 2 — Leaky Bucket</h2>
+    </div>
+
+    <div class="algo-card h-leaky">
+      <div class="algo-header">
+        <div class="algo-icon">💧</div>
+        <div class="algo-title">
+          <h3>Leaky Bucket Algorithm</h3>
+          <p>Uses a queue • Processes at fixed rate • Smooth outflow</p>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p>All incoming requests are added to a queue (the "bucket"). Requests leak out of the bottom at a <em>fixed, controlled rate</em> for processing. The bucket absorbs spikes; the server only ever gets a steady stream.</p>
+      </div>
+    </div>
+
+    <h3>How It Works — The Shower Analogy</h3>
+    <div class="flow">
+      <div class="flow-title">💧 Leaky Bucket — Visual (Capacity=10,000, Process Rate=5/min)</div>
+      <pre style="color:var(--text);line-height:2.3">
+  20,000 requests/minute coming in (users hammering the API)
+          │
+          ▼  All requests fall into the bucket (queue)
+  ┌───────────────────┐
+  │  BUCKET (Queue)   │  ← Max capacity: 10,000
+  │  [][][][][][][][] │
+  │  [][][][][][][][] │  ← Requests pile up here
+  │  [][][][][][][][] │
+  └────────┬──────────┘
+           │ Leaks at fixed rate (5 req/min)
+           │ (hole size = your server's processing rate)
+           ▼
+      ┌─────────┐
+      │  Server │ ← Gets exactly 5 req/min. Calm & steady!
+      └─────────┘
+
+  If bucket fills up past 10,000?
+  → New requests are DROPPED (429 Too Many Requests)</pre>
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🚿</div>
+      <div class="analogy-text">
+        <strong>Exactly like a shower!</strong> Your tank has 1500 litres (bucket capacity). The tap is fully open (users sending lots of requests). But the shower head controls the actual flow — water comes out at a comfortable, fixed rate. You enjoy the shower; the tank handles the pressure.
+      </div>
+    </div>
+
+    <div class="pros-cons">
+      <div class="pros">
+        <h4>✅ Pros</h4>
+        <li>Memory efficient with limited queue size</li>
+        <li>Smooth, stable outflow rate</li>
+        <li>Server never gets overwhelmed</li>
+        <li>Perfect for use cases needing steady flow</li>
+      </div>
+      <div class="cons">
+        <h4>❌ Cons</h4>
+        <li>Burst traffic fills the queue with old requests</li>
+        <li>New requests may starve if queue is full of old ones</li>
+        <li>Two parameters to tune: queue size + drain rate</li>
+        <li>Hit-and-trial tuning in production</li>
+      </div>
+    </div>
+
+    <h3>Token Bucket vs Leaky Bucket</h3>
+    <div class="compare-grid">
+      <div class="compare-card c-orange">
+        <h4>🪣 Token Bucket</h4>
+        <ul>
+          <li>Allows short bursts (if tokens available, send fast)</li>
+          <li>Rate varies based on token availability</li>
+          <li>Better for bursty traffic patterns</li>
+          <li>Requests processed as soon as token is available</li>
+        </ul>
+      </div>
+      <div class="compare-card c-blue">
+        <h4>💧 Leaky Bucket</h4>
+        <ul>
+          <li>Fixed, constant processing rate — no bursts</li>
+          <li>Rate is always exactly X requests/period</li>
+          <li>Better for stable, predictable outflow</li>
+          <li>Uses a queue — requests wait their turn</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 5 — FIXED WINDOW COUNTER -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>Algorithm 3 — Fixed Window Counter</h2>
+    </div>
+
+    <div class="algo-card h-fixed">
+      <div class="algo-header">
+        <div class="algo-icon">🪟</div>
+        <div class="algo-title">
+          <h3>Fixed Window Counter Algorithm</h3>
+          <p>Divide time into fixed windows • Count per window • Reset on new window</p>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p>Split the timeline into equal fixed-size windows (e.g. 1 second each). Inside each window, count requests. If count exceeds the threshold, reject. When the window ends, reset the counter.</p>
+      </div>
+    </div>
+
+    <h3>How It Works</h3>
+    <div class="flow">
+      <div class="flow-title">🪟 Fixed Window Counter (Limit = 3 req/second)</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Timeline: |── Window 1 ──|── Window 2 ──|── Window 3 ──|
+            0s            1s             2s             3s
+
+  Window 1: Request 1 → counter=1 ✅  (1 < 3, allow)
+            Request 2 → counter=2 ✅  (2 < 3, allow)
+            Request 3 → counter=3 ✅  (3 = 3, allow)
+  Window ends → RESET counter to 0
+
+  Window 2: Request 4 → counter=1 ✅  (fresh window!)
+            Request 5 → counter=2 ✅
+            Request 6 → counter=3 ✅
+            Request 7 → counter=4 ❌  (4 > 3, reject 429!)
+            Request 8 → counter=4 ❌  (still rejected)</pre>
+    </div>
+
+    <h3>⚠️ The Big Bug — Edge Case Problem</h3>
+    <div class="flow">
+      <div class="flow-title">🐛 Fixed Window Edge Case Bug</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Timeline: |──── Window 1 ────|──── Window 2 ────|
+            0s               1s                  2s
+
+  At 0.5s (in Window 1): 3 requests processed ✅
+  At 1.1s (in Window 2): 1 request processed  ✅ (new window, counter reset!)
+
+  But wait... look at this 1-second window: 0.5s → 1.5s
+  ┌──────────────────────────────────┐
+  │ 0.5s to 1s (Window 1):  3 req   │
+  │ 1.0s to 1.5s (Window 2): 1 req  │
+  │ Total in this 1 second:  4 req!  │← MORE than our limit of 3!
+  └──────────────────────────────────┘
+
+  The boundary between two windows is a blind spot.
+  You can sneak in MORE requests than allowed at window edges!</pre>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ The Fundamental Bug:</strong> At the boundary between two windows, a user can send requests at the end of Window 1 AND the start of Window 2. Combined, they may exceed the limit in a single real second — even though each window looks fine individually. This is called the <strong>edge case / spike at boundaries</strong>.
+    </div>
+
+    <div class="pros-cons">
+      <div class="pros">
+        <h4>✅ Pros</h4>
+        <li>Very simple to implement</li>
+        <li>Memory efficient (just one counter)</li>
+        <li>Resets cleanly at window boundary</li>
+        <li>Small burst at edges usually OK in practice</li>
+      </div>
+      <div class="cons">
+        <h4>❌ Cons</h4>
+        <li>Edge case: 2× the limit possible at boundary</li>
+        <li>Not accurate at second-level granularity</li>
+        <li>Can be exploited by timing requests at boundaries</li>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 6 — SLIDING WINDOW LOG -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>Algorithm 4 — Sliding Window Log</h2>
+    </div>
+
+    <div class="algo-card h-swlog">
+      <div class="algo-header">
+        <div class="algo-icon">📜</div>
+        <div class="algo-title">
+          <h3>Sliding Window Log Algorithm</h3>
+          <p>Fixes Fixed Window's edge bug • Keeps a timestamp log • Most accurate</p>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p>Instead of a counter, keep a log (list) of timestamps of every request. When a new request arrives, remove all expired timestamps (outside the window), then check if the log size is still within the threshold.</p>
+      </div>
+    </div>
+
+    <h3>How It Works — Step by Step</h3>
+    <div class="flow">
+      <div class="flow-title">📜 Sliding Window Log (Limit = 3 req per 5 seconds)</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Threshold: 3 requests per 5-second window
+
+  t=1s: Request comes in
+        Log: [1s]        → count=1, (1 ≤ 3) → ✅ ALLOWED
+
+  t=3s: Request comes in
+        Log: [1s, 3s]    → count=2, (2 ≤ 3) → ✅ ALLOWED
+
+  t=4.5s: Request comes in
+        Log: [1s, 3s, 4.5s] → count=3, (3 ≤ 3) → ✅ ALLOWED
+
+  t=6s: Request comes in
+        Window is 5s, so we remove timestamps older than 6-5=1s
+        → Remove t=1s (expired!)
+        Log: [3s, 4.5s, 6s] → count=3, (3 ≤ 3) → ✅ ALLOWED
+
+  t=7s: Two requests come in
+        Remove t=2s window start (6-5=2s), t=3s still alive since 3>2
+        Log: [3s, 4.5s, 6s] → count=3 already
+        New request → count would be 4 → ❌ REJECTED!
+        Another request → count would be 4 → ❌ REJECTED!
+
+  t=8s: Request comes in
+        Remove expired timestamps older than 8-5=3s
+        → Remove t=3s (expired!)
+        Log: [4.5s, 6s, 8s] → count=3, (3 ≤ 3) → ✅ ALLOWED</pre>
+    </div>
+
+    <div class="success">
+      <strong>✅ No edge case bug!</strong> Because the window is always computed relative to NOW (not a fixed slot), there's no blind spot at boundaries. The window slides forward with every request check.
+    </div>
+
+    <div class="keypoint">
+      <strong>How it's stored:</strong> Timestamp data is usually kept in a cache (like Redis sorted sets). The key is the user ID, and the values are timestamps of recent requests.
+    </div>
+
+    <div class="pros-cons">
+      <div class="pros">
+        <h4>✅ Pros</h4>
+        <li>Very accurate — no edge case bug</li>
+        <li>Window always reflects the last N seconds exactly</li>
+        <li>Fair to all users regardless of timing</li>
+      </div>
+      <div class="cons">
+        <h4>❌ Cons</h4>
+        <li>Memory intensive — store timestamp per request</li>
+        <li>Even rejected requests consume log space</li>
+        <li>More complex to implement than fixed window</li>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 7 — SLIDING WINDOW COUNTER -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>Algorithm 5 — Sliding Window Counter (Hybrid)</h2>
+    </div>
+
+    <div class="algo-card h-swcnt">
+      <div class="algo-header">
+        <div class="algo-icon">⚗️</div>
+        <div class="algo-title">
+          <h3>Sliding Window Counter Algorithm</h3>
+          <p>Hybrid of Fixed Window + Sliding Window Log • Best balance of accuracy and memory</p>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p>Uses fixed windows (for counters) but approximates a sliding window by weighting the previous window's count proportionally. Best of both worlds!</p>
+      </div>
+    </div>
+
+    <h3>The Core Idea</h3>
+    <div class="flow">
+      <div class="flow-title">⚗️ Sliding Window Counter — The Formula</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Threshold: 3 requests per second
+
+  ┌──────────────────────────────────────────────────────┐
+  │   Window 1 (0s–1s)     │    Window 2 (1s–2s)        │
+  │   Count = 3            │    Count so far = 1         │
+  └──────────────────────────────────────────────────────┘
+
+  A new request arrives at t=1.3s
+  → It's 30% into Window 2 (0.3s into a 1s window)
+  → That means 70% of Window 1 is still "relevant"
+
+  Effective Count = (Window 1 count × 70%) + Window 2 count
+                 = (3 × 0.70) + 1
+                 = 2.1 + 1
+                 = 3.1  → Exceeds threshold of 3 → ❌ REJECT!
+
+  Another scenario: request at t=1.8s (80% into Window 2)
+  → Only 20% of Window 1 is relevant
+  Effective Count = (3 × 0.20) + 0
+                 = 0.6 + 0 = 0.6 → Well under 3 → ✅ ALLOW!</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>The formula:</strong><br>
+      <code>Effective Count = (Prev Window Count × (1 - % through current window)) + Current Window Count</code><br><br>
+      The closer you are to the end of the current window, the less weight the previous window carries. This creates a smooth, sliding effect without storing individual timestamps.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🎚️</div>
+      <div class="analogy-text">
+        <strong>Think of it like a volume fade:</strong> As you move further into the current window, the previous window's count "fades out" like a volume knob turning down. At 0% through current window, previous counts 100%. At 100% through current window, previous counts 0%.
+      </div>
+    </div>
+
+    <div class="pros-cons">
+      <div class="pros">
+        <h4>✅ Pros</h4>
+        <li>Much more accurate than Fixed Window</li>
+        <li>Memory efficient — only two counters needed</li>
+        <li>Handles edge case much better</li>
+        <li>Great balance of accuracy vs complexity</li>
+      </div>
+      <div class="cons">
+        <h4>❌ Cons</h4>
+        <li>Still an approximation (not 100% exact)</li>
+        <li>Slightly more complex than Fixed Window</li>
+        <li>Edge cases with very high burst traffic still possible</li>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 8 — COMPARISON -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>Full Comparison Table & Summary</h2>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Algorithm</th><th>How it works</th><th>Allows Bursts?</th><th>Edge Bug?</th><th>Memory</th><th>Used By</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong style="color:var(--yellow)">🪣 Token Bucket</strong></td>
+          <td>Tokens refill at fixed rate. Each req takes one token. No token = drop.</td>
+          <td>✅ Yes (if tokens available)</td>
+          <td>✅ No bug</td>
+          <td>Low (1 counter)</td>
+          <td>Amazon, Stripe</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--accent)">💧 Leaky Bucket</strong></td>
+          <td>Requests queue up. Processed at fixed drain rate. Queue full = drop.</td>
+          <td>❌ No (fixed rate always)</td>
+          <td>✅ No bug</td>
+          <td>Low (queue size)</td>
+          <td>Nginx, network throttling</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--orange)">🪟 Fixed Window</strong></td>
+          <td>Count requests per fixed time window. Exceed limit = drop. Reset on new window.</td>
+          <td>⚠️ Small burst at edges</td>
+          <td>❌ Has edge bug</td>
+          <td>Very Low (1 counter)</td>
+          <td>Simple APIs</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--green)">📜 Sliding Window Log</strong></td>
+          <td>Keep timestamp log of all requests. Remove expired. Count log size.</td>
+          <td>✅ Accurate at all times</td>
+          <td>✅ No bug</td>
+          <td>High (all timestamps)</td>
+          <td>High-accuracy APIs</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--accent2)">⚗️ Sliding Window Counter</strong></td>
+          <td>Hybrid: fixed window counts + weighted previous window formula.</td>
+          <td>✅ Mostly accurate</td>
+          <td>✅ Mostly fixed</td>
+          <td>Low (2 counters)</td>
+          <td>Most production systems</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Which Algorithm Should You Use?</h3>
+    <div class="compare-grid">
+      <div class="compare-card c-orange">
+        <h4>🪣 Use Token Bucket when...</h4>
+        <ul>
+          <li>You want to allow short traffic bursts</li>
+          <li>You need simplicity</li>
+          <li>API rate limiting (per user, per key)</li>
+          <li>Most common choice for APIs</li>
+        </ul>
+      </div>
+      <div class="compare-card c-blue">
+        <h4>💧 Use Leaky Bucket when...</h4>
+        <ul>
+          <li>You need a perfectly stable outflow rate</li>
+          <li>Processing must be smooth and predictable</li>
+          <li>Network traffic shaping</li>
+          <li>Queue-based systems</li>
+        </ul>
+      </div>
+      <div class="compare-card c-red">
+        <h4>🪟 Use Fixed Window when...</h4>
+        <ul>
+          <li>Simplicity is the priority</li>
+          <li>Slight over-limit at boundary is acceptable</li>
+          <li>Low traffic, simple use cases</li>
+          <li>Not recommended for high accuracy needs</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>📜 Use Sliding Window Log when...</h4>
+        <ul>
+          <li>Accuracy is critical (financial APIs, compliance)</li>
+          <li>Memory cost is acceptable</li>
+          <li>You must never allow even 1 extra request</li>
+          <li>Low traffic, strict rules</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>📖 Quick Recap — All 5 Algorithms</h3>
+    <div class="recap-grid">
+      <div class="recap-card">
+        <div class="icon">🪣</div>
+        <h4>Token Bucket</h4>
+        <p>Refiller adds tokens. Request takes token. No token = drop. Allows bursts.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">💧</div>
+        <h4>Leaky Bucket</h4>
+        <p>Requests queue up. Drain at fixed rate. Queue full = drop. Smooth outflow.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🪟</div>
+        <h4>Fixed Window</h4>
+        <p>Count requests per time slot. Reset counter each window. Simple but has edge bug.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📜</div>
+        <h4>Sliding Window Log</h4>
+        <p>Store all timestamps. Remove expired. Count remaining. Most accurate, most memory.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">⚗️</div>
+        <h4>Sliding Window Counter</h4>
+        <p>Hybrid: Fixed windows + weighted formula. Great balance of accuracy and efficiency.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🚫</div>
+        <h4>HTTP 429</h4>
+        <p>"Too Many Requests" — what every rate limiter returns when a request is dropped.</p>
+      </div>
+    </div>
+
+    <div class="info">
+      <strong>📌 Remember:</strong> In real production systems, rate limiting is typically done <em>per user</em> (by user ID or API key), not globally. This way, one abusive user doesn't affect everyone else. Tools like <strong>Redis</strong> are used to store the counters/logs because they're fast (in-memory) and support atomic operations (no race conditions).
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:.85rem;">
+    📼 Video 6 of the System Design Playlist &nbsp;|&nbsp;
+    Builds on Part 1 (what rate limiting is) · Now you know all 5 algorithms behind it!
+  </div>
+
+</div>
+</body>
+</html>
