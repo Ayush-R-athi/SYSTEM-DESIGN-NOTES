@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design – UPI Payments</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg:#0f1117; --card:#1a1d27; --card2:#1e2130; --border:#2d3148;
+    --accent:#5b8dee; --accent2:#a78bfa; --green:#34d399; --yellow:#fbbf24;
+    --red:#f87171; --orange:#fb923c; --teal:#2dd4bf; --indigo:#818cf8;
+    --text:#e2e8f0; --muted:#8892a4; --code-bg:#13161f;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); line-height:1.7; padding:2rem 1rem; }
+  .container { max-width:880px; margin:0 auto; }
+
+  /* Header */
+  .header {
+    text-align:center; padding:2.5rem 2rem;
+    background:linear-gradient(135deg,#1a1d27,#1e2130);
+    border:1px solid var(--border); border-radius:16px; margin-bottom:2rem;
+    position:relative; overflow:hidden;
+  }
+  .header::before {
+    content:''; position:absolute; top:-60px; right:-60px; width:200px; height:200px;
+    background:radial-gradient(circle,rgba(129,140,248,0.18) 0%,transparent 70%); border-radius:50%;
+  }
+  .header .tag {
+    display:inline-block; background:rgba(129,140,248,0.15); color:var(--indigo);
+    font-size:.75rem; font-weight:600; letter-spacing:.08em; padding:.3rem .9rem;
+    border-radius:20px; border:1px solid rgba(129,140,248,0.3); margin-bottom:1rem; text-transform:uppercase;
+  }
+  .header h1 { font-size:2rem; font-weight:700; color:#fff; margin-bottom:.5rem; }
+  .header p  { color:var(--muted); font-size:.95rem; }
+
+  /* TOC */
+  .toc { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin-bottom:2rem; }
+  .toc h2 { font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:1rem; }
+  .toc ol { padding-left:1.4rem; }
+  .toc li { margin-bottom:.4rem; }
+  .toc a  { color:var(--indigo); text-decoration:none; font-size:.93rem; }
+  .toc a:hover { text-decoration:underline; }
+
+  /* Section */
+  .section { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:2rem; margin-bottom:1.5rem; }
+  .section-header { display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+  .section-num {
+    width:36px; height:36px; background:linear-gradient(135deg,var(--indigo),var(--accent2));
+    border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.9rem; color:#fff; flex-shrink:0;
+  }
+  .section h2 { font-size:1.25rem; font-weight:700; color:#fff; }
+  h3 { font-size:1rem; font-weight:600; color:#fff; margin:1.4rem 0 .7rem; }
+  p  { margin-bottom:1rem; color:var(--text); font-size:.96rem; }
+  p:last-child { margin-bottom:0; }
+  code { background:var(--code-bg); padding:.1rem .4rem; border-radius:4px; color:var(--indigo); font-family:'JetBrains Mono',monospace; font-size:.88em; }
+
+  /* Callouts */
+  .keypoint { background:rgba(129,140,248,.08); border-left:3px solid var(--indigo);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .keypoint strong { color:var(--indigo); }
+  .success  { background:rgba(52,211,153,.08);  border-left:3px solid var(--green);   border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .success  strong { color:var(--green); }
+  .warn     { background:rgba(251,191,36,.08);  border-left:3px solid var(--yellow);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .warn     strong { color:var(--yellow); }
+  .danger   { background:rgba(248,113,113,.08); border-left:3px solid var(--red);     border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .danger   strong { color:var(--red); }
+  .info     { background:rgba(91,141,238,.08);  border-left:3px solid var(--accent);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .info     strong { color:var(--accent); }
+
+  /* Flow */
+  .flow { background:var(--code-bg); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin:1.2rem 0; font-family:'JetBrains Mono',monospace; font-size:.82rem; overflow-x:auto; }
+  .flow-title { font-size:.75rem; color:var(--muted); font-family:'Inter',sans-serif; text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem; }
+
+  /* Analogy */
+  .analogy { background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem; margin:1rem 0; display:flex; gap:1rem; align-items:flex-start; }
+  .analogy-icon { font-size:1.5rem; flex-shrink:0; }
+  .analogy-text { font-size:.9rem; }
+  .analogy-text strong { color:#fff; }
+
+  /* Compare */
+  .compare-grid   { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem; }
+  .compare-card h4 { font-size:.88rem; font-weight:600; margin-bottom:.8rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+  .compare-card.c-red    h4 { color:var(--red); }
+  .compare-card.c-green  h4 { color:var(--green); }
+  .compare-card.c-teal   h4 { color:var(--teal); }
+  .compare-card.c-blue   h4 { color:var(--accent); }
+  .compare-card.c-indigo h4 { color:var(--indigo); }
+  .compare-card.c-yellow h4 { color:var(--yellow); }
+  .compare-card.c-orange h4 { color:var(--orange); }
+  .compare-card ul { padding-left:1.2rem; }
+  .compare-card li { font-size:.88rem; color:var(--muted); margin-bottom:.35rem; }
+
+  table { width:100%; border-collapse:collapse; margin:1.2rem 0; font-size:.88rem; }
+  th { background:var(--code-bg); color:var(--indigo); padding:.7rem 1rem; text-align:left; font-weight:600; border-bottom:2px solid var(--border); }
+  td { padding:.65rem 1rem; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(255,255,255,.02); }
+
+  /* Actor cards (layered architecture) */
+  .actor-stack { display:flex; flex-direction:column; gap:.6rem; margin:1.2rem 0; }
+  .actor-row {
+    display:flex; align-items:center; gap:1rem;
+    border-radius:10px; padding:.9rem 1.2rem; border:1px solid;
+  }
+  .actor-row.layer-user    { background:rgba(52,211,153,.06);   border-color:rgba(52,211,153,.3); }
+  .actor-row.layer-psp     { background:rgba(251,191,36,.06);   border-color:rgba(251,191,36,.3); }
+  .actor-row.layer-bank    { background:rgba(91,141,238,.06);   border-color:rgba(91,141,238,.3); }
+  .actor-row.layer-npci    { background:rgba(129,140,248,.06);  border-color:rgba(129,140,248,.3); }
+  .actor-num { width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:.8rem; font-weight:700; flex-shrink:0; }
+  .actor-row.layer-user  .actor-num { background:rgba(52,211,153,.2);  color:var(--green); }
+  .actor-row.layer-psp   .actor-num { background:rgba(251,191,36,.2);  color:var(--yellow); }
+  .actor-row.layer-bank  .actor-num { background:rgba(91,141,238,.2);  color:var(--accent); }
+  .actor-row.layer-npci  .actor-num { background:rgba(129,140,248,.2); color:var(--indigo); }
+  .actor-content strong { color:#fff; font-size:.9rem; display:block; margin-bottom:.2rem; }
+  .actor-content span   { font-size:.82rem; color:var(--muted); }
+  .actor-examples { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.4rem; }
+  .ex-tag {
+    font-size:.72rem; padding:.15rem .5rem; border-radius:4px; font-weight:600;
+    background:rgba(255,255,255,.05); border:1px solid var(--border); color:var(--muted);
+  }
+
+  /* Step-by-step transaction */
+  .txn-steps { display:flex; flex-direction:column; gap:.5rem; margin:1.2rem 0; }
+  .txn-step { display:flex; align-items:flex-start; gap:1rem; background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:.9rem 1.2rem; }
+  .txn-num { width:28px; height:28px; border-radius:50%; background:var(--indigo); color:#fff; display:flex; align-items:center; justify-content:center; font-size:.75rem; font-weight:700; flex-shrink:0; margin-top:.1rem; }
+  .txn-content strong { color:#fff; font-size:.88rem; display:block; margin-bottom:.2rem; }
+  .txn-content span   { font-size:.82rem; color:var(--muted); }
+  .txn-arrow { text-align:center; color:var(--muted); font-size:1rem; padding:.1rem 0; }
+
+  /* VPA visual */
+  .vpa-box {
+    background:var(--code-bg); border:1px solid rgba(129,140,248,.4); border-radius:12px;
+    padding:1.5rem; margin:1.2rem 0; text-align:center;
+  }
+  .vpa-label { font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.6rem; font-family:'Inter',sans-serif; }
+  .vpa-text { font-family:'JetBrains Mono',monospace; font-size:1.4rem; font-weight:700; }
+  .vpa-user { color:var(--green); }
+  .vpa-sep  { color:var(--muted); }
+  .vpa-handle { color:var(--indigo); }
+  .vpa-vs { display:flex; gap:2rem; justify-content:center; flex-wrap:wrap; margin-top:1rem; }
+  .vpa-compare { text-align:left; }
+  .vpa-compare h5 { font-size:.78rem; color:var(--muted); margin-bottom:.4rem; }
+  .vpa-compare p  { font-family:'JetBrains Mono',monospace; font-size:.82rem; color:var(--text); }
+
+  /* Recap */
+  .recap-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .recap-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center; }
+  .recap-card .icon { font-size:1.5rem; margin-bottom:.4rem; }
+  .recap-card h4 { font-size:.85rem; font-weight:600; color:#fff; margin-bottom:.3rem; }
+  .recap-card p  { font-size:.78rem; color:var(--muted); margin:0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="tag">📓 Study Notes — Video 9</div>
+    <h1>System Design of UPI Payments</h1>
+    <p>How PhonePe, Google Pay & Paytm route your ₹1000 — step by step through NPCI's network</p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 What's Inside</h2>
+    <ol>
+      <li><a href="#s1">The Problem — Payments Before UPI</a></li>
+      <li><a href="#s2">Traditional Transfer Methods (IMPS, NEFT, RTGS)</a></li>
+      <li><a href="#s3">What is UPI? (Unified Payment Interface)</a></li>
+      <li><a href="#s4">The Four Actors in UPI</a></li>
+      <li><a href="#s5">VPA — Virtual Payment Address</a></li>
+      <li><a href="#s6">NPCI — The Central Backbone</a></li>
+      <li><a href="#s7">Full UPI Transaction Flow — Step by Step</a></li>
+      <li><a href="#s8">Push vs Pull Mechanism</a></li>
+      <li><a href="#s9">What Happens When a Transaction Fails?</a></li>
+      <li><a href="#s10">PSP Partner Banks & Full Summary</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>The Problem — Payments Before UPI</h2>
+    </div>
+
+    <p>To understand why UPI is such a big deal, you need to understand how painful digital payments were before it existed.</p>
+
+    <div class="flow">
+      <div class="flow-title">😩 Sending Money Before UPI — What You Needed</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Friend: "Hey send me ₹1000"
+  You:    "Sure! What are your bank details?"
+
+  Friend sends:
+  ┌─────────────────────────────────────────────────┐
+  │  Account Number:  123456789012                  │
+  │  Bank Name:       HDFC Bank                     │
+  │  Branch:          Koramangala, Bengaluru         │
+  │  IFSC Code:       HDFC0001234                   │
+  │  Account Type:    Savings                       │
+  └─────────────────────────────────────────────────┘
+
+  You then:
+  1. Log into net banking
+  2. Add friend as a "beneficiary" (takes 30 min to activate)
+  3. Fill in all those details carefully
+  4. Enter OTP
+  5. Submit transfer
+  6. Wait 2-3 hours (NEFT) or pay extra for instant (IMPS)
+  
+  Mistakes possible at EVERY step. One typo = wrong account.</pre>
+    </div>
+
+    <div class="danger">
+      <strong>❌ Problems with traditional bank transfers:</strong><br>
+      • Too much information required — 5 different fields just to send money<br>
+      • Not instant for large amounts (NEFT takes hours)<br>
+      • Not user-friendly — designed for desktop net banking, not mobile<br>
+      • Easy to make mistakes — wrong IFSC, wrong account = lost money<br>
+      • No common standard — every bank had its own net banking interface
+    </div>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>Traditional Transfer Methods (IMPS, NEFT, RTGS)</h2>
+    </div>
+
+    <p>Before UPI, India had three main digital transfer systems. All are still available but UPI has largely replaced them for everyday use.</p>
+
+    <table>
+      <thead>
+        <tr><th>Method</th><th>Full Form</th><th>Speed</th><th>Best For</th><th>Limit</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong style="color:var(--yellow)">IMPS</strong></td>
+          <td>Immediate Payment Service</td>
+          <td>Instant (24×7)</td>
+          <td>Small amounts, urgent</td>
+          <td>₹2 lakh/txn</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--orange)">NEFT</strong></td>
+          <td>National Electronic Funds Transfer</td>
+          <td>2–3 hours (batch)</td>
+          <td>Non-urgent transfers, up to ₹1 lakh</td>
+          <td>No limit</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--indigo)">RTGS</strong></td>
+          <td>Real-Time Gross Settlement</td>
+          <td>Instant</td>
+          <td>Large amounts only (min ₹2 lakh)</td>
+          <td>No limit (min ₹2L)</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--green)">UPI</strong></td>
+          <td>Unified Payment Interface</td>
+          <td>Instant (24×7)</td>
+          <td>Everything — from ₹1 to ₹1 lakh</td>
+          <td>₹1 lakh/txn</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="keypoint">
+      <strong>Why NEFT isn't instant:</strong> NEFT works in "batches" — all transactions in a 30-minute window are grouped and settled together. That's why it can take 2–3 hours. When you do NEFT, you get a UTR number as proof that the request was sent — but the money hasn't moved yet.
+    </div>
+  </div>
+
+  <!-- SECTION 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>What is UPI? (Unified Payment Interface)</h2>
+    </div>
+
+    <div class="keypoint">
+      <strong>UPI = Unified Payment Interface</strong><br>
+      An infrastructure created by NPCI (National Payments Corporation of India) that makes instant, real-time money transfers as simple as entering a username. No account numbers, no IFSC codes, no branch details.
+    </div>
+
+    <p>UPI's main innovation is radical simplicity:</p>
+
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>❌ Before UPI (Net Banking / IMPS)</h4>
+        <ul>
+          <li>Need: Account number (12+ digits)</li>
+          <li>Need: IFSC code (11 characters)</li>
+          <li>Need: Bank name</li>
+          <li>Need: Branch name/code</li>
+          <li>Need: Account type</li>
+          <li>Complex UI, desktop-first design</li>
+          <li>Prone to errors at every step</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>✅ With UPI</h4>
+        <ul>
+          <li>Need: Just a VPA (e.g. <code>ram@upi</code>)</li>
+          <li>Need: Amount</li>
+          <li>Need: Your UPI PIN</li>
+          <li>That's it. Done in 10 seconds.</li>
+          <li>Mobile-first, simple UI</li>
+          <li>Works for QR code, number, or VPA</li>
+          <li>Instant, 24×7, real-time settlement</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">📧</div>
+      <div class="analogy-text">
+        <strong>UPI is like email for money.</strong> To send someone an email, you don't need to know their server IP, port number, or mail server config. You just need their email address (<code>name@gmail.com</code>). UPI does the same for money — just a VPA (<code>name@bank</code>) and the network handles everything else.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>The Four Actors in UPI</h2>
+    </div>
+
+    <p>Every UPI transaction involves exactly four types of participants. Understanding these is the key to understanding the whole system.</p>
+
+    <div class="actor-stack">
+      <div class="actor-row layer-user">
+        <div class="actor-num">1</div>
+        <div class="actor-content">
+          <strong>👤 User (Payer & Payee)</strong>
+          <span>The person sending money (payer) and the person receiving money (payee). Each has their own VPA and is linked to a bank account.</span>
+        </div>
+      </div>
+
+      <div class="actor-row layer-psp">
+        <div class="actor-num">2</div>
+        <div class="actor-content">
+          <strong>📱 Customer PSP — Payment Service Provider App</strong>
+          <span>The mobile app the user interacts with. Provides the UI, QR scanner, and transaction management. Cannot talk to NPCI directly — must go through a partner bank.</span>
+          <div class="actor-examples">
+            <span class="ex-tag">Google Pay</span>
+            <span class="ex-tag">PhonePe</span>
+            <span class="ex-tag">Paytm</span>
+            <span class="ex-tag">BHIM</span>
+            <span class="ex-tag">Amazon Pay</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="actor-row layer-bank">
+        <div class="actor-num">3</div>
+        <div class="actor-content">
+          <strong>🏦 Partner / Sponsor Banks (PSP Banks)</strong>
+          <span>Trusted banks that are members of NPCI's network. Each PSP app partners with one or more banks to route transactions to NPCI. Also includes the Issuing Bank (payer's bank) and Acquiring Bank (payee's bank).</span>
+          <div class="actor-examples">
+            <span class="ex-tag">ICICI</span>
+            <span class="ex-tag">HDFC</span>
+            <span class="ex-tag">SBI</span>
+            <span class="ex-tag">Yes Bank</span>
+            <span class="ex-tag">Axis Bank</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="actor-row layer-npci">
+        <div class="actor-num">4</div>
+        <div class="actor-content">
+          <strong>🏛️ NPCI — National Payments Corporation of India</strong>
+          <span>The central backbone. Operates and maintains the UPI infrastructure. Routes transactions between banks. Only trusts communications from registered banks — completely closed to the public.</span>
+          <div class="actor-examples">
+            <span class="ex-tag">Central infrastructure</span>
+            <span class="ex-tag">Not a bank</span>
+            <span class="ex-tag">Not a payment gateway</span>
+            <span class="ex-tag">Regulated by RBI</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>Critical rule:</strong> No app (PhonePe, Google Pay) can talk to NPCI directly. They MUST go through a trusted partner bank. NPCI's network is a closed, secure system that only accepts API calls from registered, trusted banks.
+    </div>
+  </div>
+
+  <!-- SECTION 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>VPA — Virtual Payment Address</h2>
+    </div>
+
+    <p>The VPA (Virtual Payment Address) is UPI's genius. It's a simple human-readable address that maps to a full bank account, without exposing any sensitive banking details.</p>
+
+    <div class="vpa-box">
+      <div class="vpa-label">VPA Structure</div>
+      <div class="vpa-text">
+        <span class="vpa-user">username</span>
+        <span class="vpa-sep">@</span>
+        <span class="vpa-handle">bankhandle</span>
+      </div>
+      <div class="vpa-vs">
+        <div class="vpa-compare">
+          <h5>Examples:</h5>
+          <p>piyush@oksbi</p>
+          <p>john.doe@ybl</p>
+          <p>shop123@okaxis</p>
+          <p>rahul@paytm</p>
+        </div>
+        <div class="vpa-compare">
+          <h5>UPI Handles by Bank:</h5>
+          <p>@okicici → ICICI</p>
+          <p>@ybl → Yes Bank</p>
+          <p>@oksbi → SBI</p>
+          <p>@okaxis → Axis</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>❌ Traditional: What You Had to Share</h4>
+        <ul>
+          <li>Account Number: 123456789012</li>
+          <li>Bank: HDFC Bank</li>
+          <li>IFSC: HDFC0001234</li>
+          <li>Branch: Koramangala</li>
+          <li>Account type: Savings</li>
+          <li>Risk: expose all banking details!</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>✅ UPI: What You Share</h4>
+        <ul>
+          <li>VPA: <code>piyush@okicici</code></li>
+          <li>That's literally it.</li>
+          <li>Memorisable, shareable, safe</li>
+          <li>No real bank details exposed</li>
+          <li>Maps internally to real account</li>
+          <li>QR code = just an image of your VPA</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="success">
+      <strong>✅ QR Code = Your VPA in image form.</strong><br>
+      When a shopkeeper shows you a QR code to scan, that QR code contains nothing but their VPA (e.g. <code>shop123@ybl</code>). Scanning it is just a convenient way to auto-type the VPA into the app so you don't have to type it manually.
+    </div>
+  </div>
+
+  <!-- SECTION 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>NPCI — The Central Backbone</h2>
+    </div>
+
+    <p><strong>NPCI (National Payments Corporation of India)</strong> is the entity that built and operates the UPI infrastructure. Understanding what NPCI is (and is NOT) is crucial.</p>
+
+    <div class="compare-grid">
+      <div class="compare-card c-green">
+        <h4>✅ What NPCI IS</h4>
+        <ul>
+          <li>The infrastructure/backbone of UPI</li>
+          <li>A routing system between banks</li>
+          <li>A trusted, closed network</li>
+          <li>The arbiter of all UPI transactions</li>
+          <li>Operates under RBI regulation</li>
+          <li>Handles billions of transactions</li>
+        </ul>
+      </div>
+      <div class="compare-card c-red">
+        <h4>❌ What NPCI is NOT</h4>
+        <ul>
+          <li>Not a bank (doesn't hold your money)</li>
+          <li>Not a payment gateway (like Razorpay)</li>
+          <li>Not publicly accessible (APIs are closed)</li>
+          <li>Not the app you see (that's PSP)</li>
+          <li>Not accessible by Google Pay / PhonePe directly</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>NPCI's Security Model:</strong><br>
+      NPCI's APIs are NOT public. It runs on a closed, secure network. The ONLY entities allowed to talk to NPCI are registered, RBI-regulated banks. This is why PhonePe must partner with Yes Bank — to get access to NPCI's network through that trusted bank.
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🏛️</div>
+      <div class="analogy-text">
+        <strong>NPCI = The post office sorting facility.</strong> You (user) can't walk into the sorting facility. You go to a post office branch (your bank/PSP). The branch sends your mail to the sorting facility (NPCI), which routes it to the right destination branch (payee's bank/PSP), which delivers it to the recipient.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>Full UPI Transaction Flow — Step by Step</h2>
+    </div>
+
+    <p>Let's trace a real payment: <strong>User A</strong> (PhonePe, Yes Bank account) sends ₹1000 to <strong>Piyush</strong> (Google Pay, ICICI account).</p>
+
+    <div class="txn-steps">
+      <div class="txn-step">
+        <div class="txn-num">1</div>
+        <div class="txn-content">
+          <strong>User creates Payment Intent</strong>
+          <span>User opens PhonePe, scans QR or types VPA: <code>piyush@okicici</code>, enters amount ₹1000, clicks Pay.</span>
+        </div>
+      </div>
+      <div class="txn-arrow">↓</div>
+      <div class="txn-step">
+        <div class="txn-num">2</div>
+        <div class="txn-content">
+          <strong>PhonePe → Yes Bank (Partner Bank)</strong>
+          <span>PhonePe cannot talk to NPCI directly. So it forwards the payment request to its partner bank: Yes Bank.</span>
+        </div>
+      </div>
+      <div class="txn-arrow">↓</div>
+      <div class="txn-step">
+        <div class="txn-num">3</div>
+        <div class="txn-content">
+          <strong>Yes Bank → NPCI (on Secure Network)</strong>
+          <span>Yes Bank is a trusted NPCI member. It puts the payment request onto NPCI's secure closed network. NPCI accepts it because it comes from a trusted source.</span>
+        </div>
+      </div>
+      <div class="txn-arrow">↓</div>
+      <div class="txn-step">
+        <div class="txn-num">4</div>
+        <div class="txn-content">
+          <strong>NPCI: Check Sender Balance</strong>
+          <span>NPCI asks Yes Bank: "Does User A have ₹1000 in their account?" Yes Bank confirms: "Yes, balance available."</span>
+        </div>
+      </div>
+      <div class="txn-arrow">↓</div>
+      <div class="txn-step">
+        <div class="txn-num">5</div>
+        <div class="txn-content">
+          <strong>NPCI → PhonePe: Request Authentication</strong>
+          <span>NPCI tells PhonePe to ask the user for their UPI PIN. PhonePe shows the PIN entry screen.</span>
+        </div>
+      </div>
+      <div class="txn-arrow">↓</div>
+      <div class="txn-step">
+        <div class="txn-num">6</div>
+        <div class="txn-content">
+          <strong>User enters UPI PIN</strong>
+          <span>User enters their 4 or 6 digit UPI PIN. This is sent back to Yes Bank for authentication. This authorizes the debit.</span>
+        </div>
+      </div>
+      <div class="txn-arrow">↓</div>
+      <div class="txn-step">
+        <div class="txn-num">7</div>
+        <div class="txn-content">
+          <strong>NPCI → Yes Bank: DEBIT ₹1000</strong>
+          <span>NPCI instructs Yes Bank to debit ₹1000 from User A's account. Yes Bank executes the debit and sends acknowledgement back to NPCI.</span>
+        </div>
+      </div>
+      <div class="txn-arrow">↓</div>
+      <div class="txn-step">
+        <div class="txn-num">8</div>
+        <div class="txn-content">
+          <strong>NPCI → ICICI Bank: CREDIT ₹1000</strong>
+          <span>NPCI looks up <code>piyush@okicici</code> → finds it maps to ICICI Bank → instructs ICICI to credit ₹1000 to Piyush's account.</span>
+        </div>
+      </div>
+      <div class="txn-arrow">↓</div>
+      <div class="txn-step">
+        <div class="txn-num">9</div>
+        <div class="txn-content">
+          <strong>Both Banks Send Acknowledgements</strong>
+          <span>ICICI confirms: "₹1000 credited to Piyush." Yes Bank confirms: "₹1000 debited from User A." ONLY when BOTH acknowledgements are received does NPCI mark the transaction as SUCCESS.</span>
+        </div>
+      </div>
+      <div class="txn-arrow">↓</div>
+      <div class="txn-step">
+        <div class="txn-num">10</div>
+        <div class="txn-content">
+          <strong>Notifications Sent to Both Apps</strong>
+          <span>ICICI notifies Google Pay: "₹1000 received by Piyush from User A." Yes Bank notifies PhonePe: "₹1000 sent successfully." Both users see the notification instantly.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">🏗️ Transaction Architecture — Visual Summary</div>
+      <pre style="color:var(--text);line-height:2.2">
+  User A                                               Piyush
+  (PhonePe)                                         (Google Pay)
+     │                                                    │
+     │                                                    │
+     ▼                                                    ▼
+  PhonePe App ←——→ Yes Bank ←——→ NPCI ←——→ ICICI ←——→ Google Pay
+  (Customer PSP)  (PSP Bank / (Central   (Acquiring   (Customer PSP
+                  Issuing Bank) Backbone)  Bank)        / Payee PSP)
+
+  FLOW:
+  PhonePe → Yes Bank → NPCI → Yes Bank (Debit) + ICICI (Credit)
+                             ↑
+                    Verifies both ACKs
+                    Only then: SUCCESS</pre>
+    </div>
+  </div>
+
+  <!-- SECTION 8 -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>Push vs Pull Mechanism</h2>
+    </div>
+
+    <p>UPI supports two directions of money movement:</p>
+
+    <div class="compare-grid">
+      <div class="compare-card c-indigo">
+        <h4>📤 PUSH (Send Money)</h4>
+        <ul>
+          <li>You initiate the payment</li>
+          <li>"I want to send ₹1000 to Ram"</li>
+          <li>Money pushed from your account to theirs</li>
+          <li>Example: Paying a shopkeeper, splitting bills</li>
+          <li>Most common UPI use case</li>
+          <li>Requires YOUR UPI PIN to authorize</li>
+        </ul>
+      </div>
+      <div class="compare-card c-teal">
+        <h4>📥 PULL (Request Money)</h4>
+        <ul>
+          <li>Someone requests money from you</li>
+          <li>"Ram is requesting ₹500 from you"</li>
+          <li>Money pulled from your account to theirs</li>
+          <li>Example: Splitting bills, merchant checkout</li>
+          <li>Used in online payments ("Pay via UPI")</li>
+          <li>Requires YOUR UPI PIN to approve the request</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>Both Push and Pull go through NPCI.</strong> In Pull, the merchant/person sends a "collect request" to NPCI, which pushes a notification to your UPI app asking you to approve. You enter your PIN to approve — at that point it becomes just like a Push from your side.
+    </div>
+  </div>
+
+  <!-- SECTION 9 -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2>What Happens When a Transaction Fails?</h2>
+    </div>
+
+    <p>You've surely experienced this: you paid a shopkeeper, your account showed "₹1000 debited," but the shopkeeper said "payment not received." What actually happened?</p>
+
+    <div class="flow">
+      <div class="flow-title">⚠️ Failed Transaction Scenario — Partial Failure</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Step 1-7: Debit from User A's account — SUCCESS ✅
+  Step 8:   NPCI tries to credit Piyush's ICICI account
+            ICICI server is busy / down / slow...
+            ICICI does NOT send acknowledgement ❌
+            NPCI waits... waits... timeout!
+
+  What NPCI does:
+  ┌────────────────────────────────────────────────────┐
+  │ NPCI: "I debited from Yes Bank but didn't get     │
+  │ acknowledgement from ICICI."                      │
+  │                                                   │
+  │ NPCI → Yes Bank: "REVERSE the debit. Give ₹1000  │
+  │ back to User A."                                  │
+  │                                                   │
+  │ Yes Bank credits ₹1000 back to User A             │
+  │                                                   │
+  │ Transaction marked as FAILED ❌                   │
+  └────────────────────────────────────────────────────┘
+
+  Why this matters: UPI never permanently loses your money.
+  Either BOTH debit + credit succeed, or BOTH are reversed.
+  This is called ATOMICITY — all or nothing!</pre>
+    </div>
+
+    <div class="success">
+      <strong>✅ UPI's atomic guarantee:</strong> A transaction is only marked COMPLETE when BOTH the debit acknowledgement from the sender's bank AND the credit acknowledgement from the receiver's bank are received by NPCI. If either fails, the whole transaction is rolled back automatically.
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ The "amount debited but not received" experience:</strong><br>
+      This happens because the debit from your account succeeded (Yes Bank), but the credit to the payee's account failed (ICICI busy). NPCI initiates a reversal. But the reversal can take 1–5 business days to show in your account, even though the transaction failed instantly. You haven't lost the money — it just takes time to reverse.
+    </div>
+  </div>
+
+  <!-- SECTION 10 -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2>PSP Partner Banks & Full Summary</h2>
+    </div>
+
+    <h3>PSP Apps and Their Partner Banks</h3>
+    <table>
+      <thead><tr><th>PSP App (Customer App)</th><th>Partner Banks</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Google Pay (GPay)</strong></td><td>Axis Bank, ICICI Bank, HDFC Bank, SBI</td><td>Most widely used in India</td></tr>
+        <tr><td><strong>PhonePe</strong></td><td>Yes Bank, ICICI Bank, Axis Bank</td><td>Largest transaction volume</td></tr>
+        <tr><td><strong>Paytm</strong></td><td>Paytm Payments Bank, HDFC</td><td>Also has wallet functionality</td></tr>
+        <tr><td><strong>Amazon Pay</strong></td><td>Yes Bank, Axis Bank</td><td>Integrated into Amazon shopping</td></tr>
+        <tr><td><strong>BHIM</strong></td><td>Multiple PSP banks (NPCI's own app)</td><td>Reference app built by NPCI</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Key Terms — Quick Reference</h3>
+    <div class="recap-grid">
+      <div class="recap-card">
+        <div class="icon">🏛️</div>
+        <h4>NPCI</h4>
+        <p>National Payments Corporation of India. Backbone of UPI. Closed to public — only trusted banks can access it.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📱</div>
+        <h4>PSP (Payment Service Provider)</h4>
+        <p>The app you use — Google Pay, PhonePe, Paytm. Provides UI, must partner with a bank to reach NPCI.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🔑</div>
+        <h4>VPA (Virtual Payment Address)</h4>
+        <p>Your UPI ID like <code>name@ybl</code>. Maps to your bank account. No sensitive details exposed.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📤</div>
+        <h4>Issuing Bank</h4>
+        <p>The payer's bank. The bank that holds the sender's money and executes the DEBIT.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📥</div>
+        <h4>Acquiring Bank</h4>
+        <p>The payee's bank. The bank that receives the money and executes the CREDIT.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">✅</div>
+        <h4>Acknowledgement</h4>
+        <p>Both banks must confirm their operation (debit & credit) for a transaction to be marked complete. Missing ACK = rollback.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📤</div>
+        <h4>Push Payment</h4>
+        <p>You initiate sending money. "I pay Ram ₹1000." Most common UPI usage.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📥</div>
+        <h4>Pull Payment</h4>
+        <p>Someone requests money from you. You approve with your PIN. Used in online checkouts.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">⚛️</div>
+        <h4>Atomicity</h4>
+        <p>UPI transactions are all-or-nothing. Either debit+credit both succeed, or both are rolled back. No permanent loss.</p>
+      </div>
+    </div>
+
+    <h3>Full Flow in One Picture</h3>
+    <div class="flow">
+      <div class="flow-title">🗺️ UPI Ecosystem Map</div>
+      <pre style="color:var(--text);line-height:2.5">
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                        RBI (Regulates all)                      │
+  └────────────────────────────┬────────────────────────────────────┘
+                               │
+  ┌────────────────────────────▼────────────────────────────────────┐
+  │                    NPCI — Backbone of UPI                       │
+  │        (Closed Network — only banks can access)                 │
+  └──────────┬──────────────────────────────────────┬──────────────┘
+             │                                      │
+  ┌──────────▼──────────┐                ┌──────────▼──────────────┐
+  │   Yes Bank (PSP)    │                │    ICICI Bank (PSP)     │
+  │  Issuing Bank       │                │   Acquiring Bank        │
+  └──────────┬──────────┘                └──────────┬──────────────┘
+             │                                      │
+  ┌──────────▼──────────┐                ┌──────────▼──────────────┐
+  │   PhonePe (App)     │                │   Google Pay (App)      │
+  │  (Customer PSP)     │                │  (Payee PSP)            │
+  └──────────┬──────────┘                └──────────┬──────────────┘
+             │                                      │
+  ┌──────────▼──────────┐                ┌──────────▼──────────────┐
+  │   User A (Payer)    │  ──₹1000──►   │  Piyush (Payee)         │
+  │  user@ybl           │                │  piyush@okicici         │
+  └─────────────────────┘                └─────────────────────────┘</pre>
+    </div>
+
+    <div class="info">
+      <strong>📌 Engineering scale of NPCI:</strong> NPCI's UPI system handles billions of transactions every day — making it one of the most heavily loaded real-time payment systems in the world. Building a fault-tolerant, real-time, distributed system at this scale is an extraordinary engineering achievement. India's UPI is now being adopted by multiple other countries as a model.
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:.85rem;">
+    📼 Video 9 of the System Design Playlist &nbsp;|&nbsp;
+    Connects to: Event Sourcing (transaction log) · CQRS (audit trail) · Rate Limiting (API throttling at NPCI scale)
+  </div>
+
+</div>
+</body>
+</html>

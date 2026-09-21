@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design – Video Streaming at Scale</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg:#0f1117; --card:#1a1d27; --card2:#1e2130; --border:#2d3148;
+    --accent:#5b8dee; --accent2:#a78bfa; --green:#34d399; --yellow:#fbbf24;
+    --red:#f87171; --orange:#fb923c; --teal:#2dd4bf; --pink:#f472b6;
+    --text:#e2e8f0; --muted:#8892a4; --code-bg:#13161f;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); line-height:1.7; padding:2rem 1rem; }
+  .container { max-width:880px; margin:0 auto; }
+
+  /* Header */
+  .header {
+    text-align:center; padding:2.5rem 2rem;
+    background:linear-gradient(135deg,#1a1d27,#1e2130);
+    border:1px solid var(--border); border-radius:16px; margin-bottom:2rem;
+    position:relative; overflow:hidden;
+  }
+  .header::before {
+    content:''; position:absolute; top:-60px; right:-60px; width:200px; height:200px;
+    background:radial-gradient(circle,rgba(251,146,60,0.15) 0%,transparent 70%); border-radius:50%;
+  }
+  .header .tag {
+    display:inline-block; background:rgba(251,146,60,0.15); color:var(--orange);
+    font-size:.75rem; font-weight:600; letter-spacing:.08em; padding:.3rem .9rem;
+    border-radius:20px; border:1px solid rgba(251,146,60,0.3); margin-bottom:1rem; text-transform:uppercase;
+  }
+  .header h1 { font-size:2rem; font-weight:700; color:#fff; margin-bottom:.5rem; }
+  .header p  { color:var(--muted); font-size:.95rem; }
+
+  /* TOC */
+  .toc { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin-bottom:2rem; }
+  .toc h2 { font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:1rem; }
+  .toc ol { padding-left:1.4rem; }
+  .toc li { margin-bottom:.4rem; }
+  .toc a  { color:var(--orange); text-decoration:none; font-size:.93rem; }
+  .toc a:hover { text-decoration:underline; }
+
+  /* Section */
+  .section { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:2rem; margin-bottom:1.5rem; }
+  .section-header { display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+  .section-num {
+    width:36px; height:36px; background:linear-gradient(135deg,var(--orange),var(--yellow));
+    border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.9rem; color:#000; flex-shrink:0;
+  }
+  .section h2 { font-size:1.25rem; font-weight:700; color:#fff; }
+  h3 { font-size:1rem; font-weight:600; color:#fff; margin:1.4rem 0 .7rem; }
+  p  { margin-bottom:1rem; color:var(--text); font-size:.96rem; }
+  p:last-child { margin-bottom:0; }
+  code { background:var(--code-bg); padding:.1rem .4rem; border-radius:4px; color:var(--orange); font-family:'JetBrains Mono',monospace; font-size:.88em; }
+
+  /* Callouts */
+  .keypoint { background:rgba(251,146,60,.08); border-left:3px solid var(--orange); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .keypoint strong { color:var(--orange); }
+  .success  { background:rgba(52,211,153,.08);  border-left:3px solid var(--green);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .success  strong { color:var(--green); }
+  .warn     { background:rgba(251,191,36,.08);  border-left:3px solid var(--yellow); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .warn     strong { color:var(--yellow); }
+  .danger   { background:rgba(248,113,113,.08); border-left:3px solid var(--red);    border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .danger   strong { color:var(--red); }
+  .info     { background:rgba(91,141,238,.08);  border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .info     strong { color:var(--accent); }
+
+  /* Flow */
+  .flow { background:var(--code-bg); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin:1.2rem 0; font-family:'JetBrains Mono',monospace; font-size:.82rem; overflow-x:auto; }
+  .flow-title { font-size:.75rem; color:var(--muted); font-family:'Inter',sans-serif; text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem; }
+
+  /* Analogy */
+  .analogy { background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem; margin:1rem 0; display:flex; gap:1rem; align-items:flex-start; }
+  .analogy-icon { font-size:1.5rem; flex-shrink:0; }
+  .analogy-text { font-size:.9rem; }
+  .analogy-text strong { color:#fff; }
+
+  /* Compare grids */
+  .compare-grid   { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem; }
+  .compare-card h4 { font-size:.88rem; font-weight:600; margin-bottom:.8rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+  .compare-card.c-red    h4 { color:var(--red); }
+  .compare-card.c-green  h4 { color:var(--green); }
+  .compare-card.c-orange h4 { color:var(--orange); }
+  .compare-card.c-teal   h4 { color:var(--teal); }
+  .compare-card.c-blue   h4 { color:var(--accent); }
+  .compare-card.c-purple h4 { color:var(--accent2); }
+  .compare-card.c-yellow h4 { color:var(--yellow); }
+  .compare-card ul { padding-left:1.2rem; }
+  .compare-card li { font-size:.88rem; color:var(--muted); margin-bottom:.35rem; }
+
+  /* Table */
+  table { width:100%; border-collapse:collapse; margin:1.2rem 0; font-size:.88rem; }
+  th { background:var(--code-bg); color:var(--orange); padding:.7rem 1rem; text-align:left; font-weight:600; border-bottom:2px solid var(--border); }
+  td { padding:.65rem 1rem; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(255,255,255,.02); }
+
+  /* Evolution timeline */
+  .evo-timeline { display:flex; flex-direction:column; gap:.8rem; margin:1.2rem 0; }
+  .evo-item {
+    display:flex; align-items:flex-start; gap:1rem;
+    background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem;
+    position:relative;
+  }
+  .evo-era {
+    min-width:110px; flex-shrink:0; font-size:.78rem; font-weight:700;
+    padding:.3rem .7rem; border-radius:6px; text-align:center; margin-top:.1rem;
+  }
+  .era-bad   { background:rgba(248,113,113,.15); color:var(--red);    border:1px solid rgba(248,113,113,.3); }
+  .era-mid   { background:rgba(251,191,36,.15);  color:var(--yellow); border:1px solid rgba(251,191,36,.3); }
+  .era-good  { background:rgba(52,211,153,.15);  color:var(--green);  border:1px solid rgba(52,211,153,.3); }
+  .evo-content strong { color:#fff; font-size:.9rem; display:block; margin-bottom:.25rem; }
+  .evo-content span   { font-size:.84rem; color:var(--muted); }
+
+  /* Segment visual */
+  .seg-strip { display:flex; gap:.4rem; flex-wrap:wrap; margin:1rem 0; }
+  .seg-box {
+    padding:.4rem .7rem; border-radius:7px; font-size:.75rem; font-weight:700;
+    font-family:'JetBrains Mono',monospace; border:1px solid;
+  }
+  .seg-480  { background:rgba(52,211,153,.1);  color:var(--green);  border-color:var(--green); }
+  .seg-720  { background:rgba(91,141,238,.1);  color:var(--accent); border-color:var(--accent); }
+  .seg-1080 { background:rgba(251,191,36,.1);  color:var(--yellow); border-color:var(--yellow); }
+  .seg-4k   { background:rgba(248,113,113,.1); color:var(--red);    border-color:var(--red); }
+  .seg-idx  { background:rgba(251,146,60,.1);  color:var(--orange); border-color:var(--orange); font-size:.78rem; }
+
+  /* Pipeline steps */
+  .pipe { display:flex; flex-direction:column; gap:.6rem; margin:1.2rem 0; }
+  .pipe-step { display:flex; align-items:center; gap:1rem; background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:.9rem 1.2rem; }
+  .pipe-num { width:28px; height:28px; border-radius:50%; background:var(--orange); color:#000; display:flex; align-items:center; justify-content:center; font-size:.75rem; font-weight:700; flex-shrink:0; }
+  .pipe-content strong { color:#fff; font-size:.88rem; display:block; margin-bottom:.15rem; }
+  .pipe-content span   { font-size:.82rem; color:var(--muted); }
+
+  /* Device grid */
+  .device-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.8rem; margin:1.2rem 0; }
+  .device-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center; }
+  .device-card .icon { font-size:1.6rem; margin-bottom:.4rem; }
+  .device-card h4 { font-size:.82rem; font-weight:600; color:#fff; margin-bottom:.25rem; }
+  .device-card p  { font-size:.76rem; color:var(--muted); margin:0; }
+
+  /* Recap */
+  .recap-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .recap-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center; }
+  .recap-card .icon { font-size:1.5rem; margin-bottom:.4rem; }
+  .recap-card h4 { font-size:.85rem; font-weight:600; color:#fff; margin-bottom:.3rem; }
+  .recap-card p  { font-size:.78rem; color:var(--muted); margin:0; }
+
+  /* Formula */
+  .formula { background:linear-gradient(135deg,rgba(251,146,60,.08),rgba(251,191,36,.08)); border:1px solid rgba(251,146,60,.3); border-radius:10px; padding:1rem 1.4rem; margin:1.2rem 0; font-family:'JetBrains Mono',monospace; font-size:.9rem; text-align:center; color:#fff; }
+  .formula .label { font-family:'Inter',sans-serif; font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="tag">📓 Study Notes — Video 8</div>
+    <h1>How Video Streaming Works at Scale</h1>
+    <p>From raw frames to adaptive bitrate streaming — the full engineering story of YouTube, Netflix & TikTok</p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 What's Inside</h2>
+    <ol>
+      <li><a href="#s1">What is a Video? (First Principles)</a></li>
+      <li><a href="#s2">The Problem — Why Video Delivery is Hard</a></li>
+      <li><a href="#s3">Era 1 — Progressive Download (The Old Way)</a></li>
+      <li><a href="#s4">Era 2 — Real-Time Streaming Protocols (RTMP / RTSP)</a></li>
+      <li><a href="#s5">Era 3 — Adaptive Bitrate Streaming (Modern Way)</a></li>
+      <li><a href="#s6">The Video Processing Pipeline</a></li>
+      <li><a href="#s7">Segments + The Manifest / Index File</a></li>
+      <li><a href="#s8">HLS vs MPEG-DASH</a></li>
+      <li><a href="#s9">How the Client Adapts — The Algorithm</a></li>
+      <li><a href="#s10">Full Summary & Architecture Overview</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>What is a Video? (First Principles)</h2>
+    </div>
+
+    <p>Before understanding video streaming, you need to understand what a video actually <em>is</em> at a technical level.</p>
+
+    <div class="keypoint">
+      <strong>A video = a sequence of images (frames) played in rapid succession.</strong><br>
+      Your brain perceives them as smooth motion — the same trick that makes a flipbook "animate."
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">🎬 How Frames Become a Video</div>
+      <pre style="color:var(--text);line-height:2.2">
+  1 image = 1 frame (a snapshot of a moment)
+
+  Play many frames rapidly one after another:
+
+  [Frame 1] [Frame 2] [Frame 3] ... [Frame 60]
+     →          →         →              →
+     └──────────────────────────────────┘
+               one second of video!
+
+  Frame Rate (FPS) = how many images per second:
+  ┌──────────┬──────────────────────────────────────────┐
+  │  1 FPS   │ Choppy, looks like a slideshow           │
+  │ 20 FPS   │ Acceptable, slightly stuttery            │
+  │ 30 FPS   │ Standard video (YouTube default)         │
+  │ 60 FPS   │ Smooth (gaming, sports)                  │
+  │ 120 FPS  │ Super smooth (high-end displays)         │
+  └──────────┴──────────────────────────────────────────┘
+
+  Higher FPS = smoother motion = LARGER file size</pre>
+    </div>
+
+    <h3>Why is Video File Size So Large?</h3>
+    <div class="flow">
+      <div class="flow-title">📦 Back-of-Envelope: Video File Size</div>
+      <pre style="color:var(--text);line-height:2">
+  A 4K video at 60 FPS, 10 minutes long:
+
+  1 uncompressed 4K frame ≈ ~25 MB (3840×2160 pixels, 24 bits each)
+  60 frames/second × 25 MB = 1,500 MB per second
+  10 minutes × 60 seconds × 1,500 MB = 900,000 MB ≈ 900 GB (raw!)
+
+  After compression (H.264 codec): ≈ 4–6 GB
+  Still massive for streaming!</pre>
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🎞️</div>
+      <div class="analogy-text">
+        <strong>Video formats (MP4, MKV, MOV) are like ZIP files for frames.</strong> They use compression algorithms (called codecs like H.264, H.265/HEVC, VP9, AV1) to reduce the file size dramatically while keeping the video watchable.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>The Problem — Why Video Delivery is Hard</h2>
+    </div>
+
+    <p>The core engineering challenge of video streaming is this: how do you deliver a 4–5 GB file to a user in real-time across wildly different devices and network conditions?</p>
+
+    <div class="device-grid">
+      <div class="device-card">
+        <div class="icon">📱</div>
+        <h4>Mobile Phone</h4>
+        <p>Small screen, 4G/WiFi, limited battery, needs 360p–1080p</p>
+      </div>
+      <div class="device-card">
+        <div class="icon">💻</div>
+        <h4>Laptop</h4>
+        <p>Medium screen, good WiFi, needs 720p–1080p</p>
+      </div>
+      <div class="device-card">
+        <div class="icon">📺</div>
+        <h4>4K TV / LED</h4>
+        <p>Big screen, wired/WiFi, needs 4K</p>
+      </div>
+      <div class="device-card">
+        <div class="icon">⌚</div>
+        <h4>Smartwatch</h4>
+        <p>Tiny screen — does it even need HD?</p>
+      </div>
+      <div class="device-card">
+        <div class="icon">🚗</div>
+        <h4>Car/Tablet</h4>
+        <p>Variable network, medium screen</p>
+      </div>
+      <div class="device-card">
+        <div class="icon">🚌</div>
+        <h4>On the Move</h4>
+        <p>Spotty network, dropping signal, needs graceful degradation</p>
+      </div>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ The hard constraint:</strong> The same 4K video file on a server must somehow play perfectly on a smartwatch with 2G internet AND on a 4K LED TV with 1Gbps fibre — simultaneously. A one-size-fits-all approach fails everyone.
+    </div>
+  </div>
+
+  <!-- SECTION 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>Era 1 — Progressive Download (The Old Way)</h2>
+    </div>
+
+    <p>In the early 2000s, there was no concept of streaming. The approach was simple — and painful.</p>
+
+    <div class="evo-timeline">
+      <div class="evo-item">
+        <div class="evo-era era-bad">Early 2000s</div>
+        <div class="evo-content">
+          <strong>Progressive Download</strong>
+          <span>User clicks play → server sends the ENTIRE video file → user must wait for all of it to download before watching. A 100 MB video = wait for 100 MB.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">📥 Progressive Download Flow</div>
+      <pre style="color:var(--text);line-height:2.2">
+  User clicks "Play" on a 4 GB video
+          │
+          ▼
+  Server starts sending the ENTIRE file
+          │
+  ████████████████████░░░░░░░░░░░░░░░
+  ← downloaded (1.2 GB)   (still coming...)
+          │
+  User waits... and waits... (buffering ⏳)
+          │
+  ████████████████████████████████████
+  ← fully downloaded (4 GB)
+          │
+          ▼
+  NOW you can finally watch the video ✅
+  
+  Problems:
+  ❌ Long wait before playback starts
+  ❌ Downloads data you may never watch (skip the video at 2 mins)
+  ❌ Wastes bandwidth on abandoned views
+  ❌ Fails on slow connections — 4 GB × 10 Mbps = 53 minutes!</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>This is where "buffering" came from!</strong> The old spinning circle while "loading" was literally waiting for the download to reach the point you want to watch. Classic early YouTube / dial-up internet experience.
+    </div>
+  </div>
+
+  <!-- SECTION 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>Era 2 — Real-Time Streaming Protocols (RTMP / RTSP)</h2>
+    </div>
+
+    <div class="evo-timeline">
+      <div class="evo-item">
+        <div class="evo-era era-mid">Mid 2000s</div>
+        <div class="evo-content">
+          <strong>RTMP & RTSP Protocols</strong>
+          <span>Adobe built RTMP (Real-Time Messaging Protocol). RealNetworks built RTSP (Real-Time Streaming Protocol). These enabled sending video in chunks — no need to download the full file first.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-orange">
+        <h4>📡 RTMP — Real-Time Messaging Protocol</h4>
+        <ul>
+          <li>Built by Adobe (the Flash company)</li>
+          <li>Low latency streaming</li>
+          <li>Live streaming support</li>
+          <li>Send video in chunks (not whole file)</li>
+          <li>Client plays as chunks arrive</li>
+          <li>Efficient bandwidth use</li>
+        </ul>
+      </div>
+      <div class="compare-card c-blue">
+        <h4>📡 RTSP — Real-Time Streaming Protocol</h4>
+        <ul>
+          <li>Built by RealNetworks</li>
+          <li>Similar goals to RTMP</li>
+          <li>Used in cameras, IP streams</li>
+          <li>Still used in security cameras today</li>
+          <li>Also specialised streaming protocol</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="success">
+      <strong>✅ What RTMP/RTSP solved:</strong> You no longer needed to wait for the full download. Video starts playing immediately as chunks arrive. If you stop watching at 2 minutes, the rest isn't downloaded — huge bandwidth savings!
+    </div>
+
+    <div class="danger">
+      <strong>❌ What RTMP/RTSP did NOT solve — The Quality Problem:</strong><br>
+      These protocols sent the video in one fixed quality — whatever the original was. If the source was 4K and your phone had only 10 Mbps internet, each chunk was still large and took too long. You'd get buffering mid-video. And a smartwatch got a full 4K chunk it didn't need!
+    </div>
+  </div>
+
+  <!-- SECTION 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>Era 3 — Adaptive Bitrate Streaming (The Modern Way)</h2>
+    </div>
+
+    <div class="evo-timeline">
+      <div class="evo-item">
+        <div class="evo-era era-good">Today</div>
+        <div class="evo-content">
+          <strong>Adaptive Bitrate Streaming (ABR)</strong>
+          <span>The video is pre-encoded into multiple quality levels. The client (your phone/TV) picks the best quality level it can handle in real-time and switches dynamically as conditions change.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>The core idea of ABR:</strong> Instead of one video at one quality, store the same video at multiple qualities (240p, 360p, 480p, 720p, 1080p, 4K). Let the <em>client</em> decide what's best for it — and let it switch mid-video if network conditions change.
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">🎯 Adaptive Bitrate — The Magic Moment</div>
+      <pre style="color:var(--text);line-height:2.2">
+  You're watching on your phone (good WiFi, 100 Mbps):
+  → Client says: "I can handle 1080p!" → streams 1080p ✅
+
+  You get on the metro, signal drops to 5 Mbps:
+  → Client detects: "Slow network!" → switches to 480p seamlessly
+  → Video keeps playing (maybe slightly blurry) — no buffering ✅
+
+  You exit the metro, back to good WiFi:
+  → Client detects: "Fast network again!" → switches to 1080p ✅
+
+  The video never stopped. Quality changed — but playback continued.</pre>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>❌ Without ABR</h4>
+        <ul>
+          <li>One fixed quality for everyone</li>
+          <li>Slow network → video stops (buffering)</li>
+          <li>Smartwatch gets same 4K file as 4K TV</li>
+          <li>No graceful degradation</li>
+          <li>Quality doesn't match device capability</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>✅ With ABR</h4>
+        <ul>
+          <li>Multiple quality options, client picks best</li>
+          <li>Slow network → lower quality, keeps playing</li>
+          <li>Each device gets what it can handle</li>
+          <li>Dynamic quality adjustment in real-time</li>
+          <li>Used by YouTube, Netflix, TikTok, Instagram</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🚰</div>
+      <div class="analogy-text">
+        <strong>Water pipe analogy:</strong> Without ABR = one fixed pipe size. Narrow pipe (bad network)? Water (video) can't flow fast enough. With ABR = adjustable pipe. If the pipe is narrow, use a thinner stream of water (lower quality). If wide, use the full flow (4K). Never dry (buffering)!
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>The Video Processing Pipeline</h2>
+    </div>
+
+    <p>For ABR to work, a LOT of processing happens <em>before</em> a video goes live. This is why YouTube says "your video is processing" for 10–30 minutes after you upload.</p>
+
+    <div class="flow">
+      <div class="flow-title">⚙️ What Happens When You Upload a Video to YouTube</div>
+      <pre style="color:var(--text);line-height:2.2">
+  You upload: Original video (4K, 4 GB MP4)
+          │
+          ▼
+  ┌─────────────────────────────────────────────────────┐
+  │           PROCESSING PIPELINE                       │
+  │                                                     │
+  │  Original 4K video → split into time segments       │
+  │                                                     │
+  │  For each segment, encode at multiple qualities:    │
+  │  ├── Encode to 240p  (very small, very slow nets)   │
+  │  ├── Encode to 360p  (mobile on 3G)                 │
+  │  ├── Encode to 480p  (mobile on 4G)                 │
+  │  ├── Encode to 720p  (standard HD)                  │
+  │  ├── Encode to 1080p (Full HD)                      │
+  │  └── Encode to 4K    (for big screens, fast nets)   │
+  │                                                     │
+  │  Generate manifest/index file (M3U8 or MPD)         │
+  └─────────────────────────────────────────────────────┘
+          │
+          ▼
+  All segments + index file stored on CDN/Object Storage
+          │
+          ▼
+  Video is LIVE and streamable 🎉</pre>
+    </div>
+
+    <div class="pipe">
+      <div class="pipe-step">
+        <div class="pipe-num">1</div>
+        <div class="pipe-content">
+          <strong>Receive raw upload</strong>
+          <span>Creator uploads original video (any format — MP4, MKV, MOV). This is stored as-is temporarily.</span>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">2</div>
+        <div class="pipe-content">
+          <strong>Transcode to multiple bitrates</strong>
+          <span>The video is encoded into 240p, 360p, 480p, 720p, 1080p, 4K versions. Each quality is a separate encoded version. This is GPU-intensive and expensive.</span>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">3</div>
+        <div class="pipe-content">
+          <strong>Split into segments (chunks)</strong>
+          <span>Each quality version is split into small ~2–10 second chunks called <strong>segments</strong>. A 10-minute video at 720p might have ~60 segments of 10 seconds each.</span>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">4</div>
+        <div class="pipe-content">
+          <strong>Generate index / manifest file</strong>
+          <span>A special file (M3U8 for HLS, MPD for DASH) is created that lists all available qualities and the location of every segment. The client reads this first.</span>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">5</div>
+        <div class="pipe-content">
+          <strong>Upload everything to CDN / Object Storage</strong>
+          <span>All segments and the manifest file are pushed to a CDN (like CloudFront). Video is now globally available with low latency.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ Storage multiplication:</strong> A 4 GB 4K video, after encoding at 6 quality levels, might become 7–10 GB total (lower qualities are smaller, but you have many of them). Multiply this by millions of videos and you need petabytes of storage — exactly why we did that calculation in Video 5's notes!
+    </div>
+  </div>
+
+  <!-- SECTION 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>Segments + The Manifest / Index File</h2>
+    </div>
+
+    <p>This is the core data structure that makes ABR streaming work. Let's understand <strong>segments</strong> and the <strong>manifest file</strong> in detail.</p>
+
+    <h3>What are Segments?</h3>
+    <div class="flow">
+      <div class="flow-title">🧩 Video Segments — 10-Minute Video at 720p</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Original 720p video: 10 minutes long
+          │
+  Split into 10-second segments:
+          │
+  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ... ┌──────┐
+  │ S1  │ │ S2  │ │ S3  │ │ S4  │ │ S5  │     │ S60  │
+  │0-10s│ │10-20│ │20-30│ │30-40│ │40-50│     │590-60│
+  └─────┘ └─────┘ └─────┘ └─────┘ └─────┘     └──────┘
+  
+  Same video at 480p → another 60 segments
+  Same video at 1080p → another 60 segments
+  Same video at 4K    → another 60 segments
+  
+  Total segments for this one video: ~240 files!</pre>
+    </div>
+
+    <h3>What is the Manifest / Index File?</h3>
+    <div class="flow">
+      <div class="flow-title">📋 M3U8 Manifest File — What it Contains</div>
+      <pre style="color:var(--text);line-height:2.2">
+  File: index.m3u8  (the "table of contents" of the video)
+
+  Contents (simplified):
+  ────────────────────────────────────────────────────
+  #EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=640x480
+  /videos/myvideo/480p/playlist.m3u8     ← 480p segments here
+
+  #EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720
+  /videos/myvideo/720p/playlist.m3u8     ← 720p segments here
+
+  #EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x1080
+  /videos/myvideo/1080p/playlist.m3u8    ← 1080p segments here
+
+  #EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=3840x2160
+  /videos/myvideo/4k/playlist.m3u8       ← 4K segments here
+  ────────────────────────────────────────────────────
+
+  And the 480p playlist.m3u8 contains:
+  ────────────────────────────────────────────────────
+  #EXTINF:10.0,
+  segment_001.ts    ← segment 1 (0–10 seconds)
+  #EXTINF:10.0,
+  segment_002.ts    ← segment 2 (10–20 seconds)
+  ...
+  ────────────────────────────────────────────────────</pre>
+    </div>
+
+    <h3>Visual: All the pieces together</h3>
+    <div style="margin:1.2rem 0;">
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:.6rem;">INDEX / MANIFEST FILE:</p>
+      <div class="seg-strip">
+        <div class="seg-box seg-idx">index.m3u8</div>
+        <span style="color:var(--muted);align-self:center;">→ points to →</span>
+        <div class="seg-box seg-480">480p playlist</div>
+        <div class="seg-box seg-720">720p playlist</div>
+        <div class="seg-box seg-1080">1080p playlist</div>
+        <div class="seg-box seg-4k">4K playlist</div>
+      </div>
+      <p style="font-size:.8rem;color:var(--muted);margin:1rem 0 .6rem;">480p SEGMENTS (each 10s chunk):</p>
+      <div class="seg-strip">
+        <div class="seg-box seg-480">seg_01.ts</div>
+        <div class="seg-box seg-480">seg_02.ts</div>
+        <div class="seg-box seg-480">seg_03.ts</div>
+        <div class="seg-box seg-480">seg_04.ts</div>
+        <div class="seg-box seg-480">seg_05.ts</div>
+        <span style="color:var(--muted);align-self:center;">...</span>
+      </div>
+      <p style="font-size:.8rem;color:var(--muted);margin:1rem 0 .6rem;">1080p SEGMENTS:</p>
+      <div class="seg-strip">
+        <div class="seg-box seg-1080">seg_01.ts</div>
+        <div class="seg-box seg-1080">seg_02.ts</div>
+        <div class="seg-box seg-1080">seg_03.ts</div>
+        <div class="seg-box seg-1080">seg_04.ts</div>
+        <div class="seg-box seg-1080">seg_05.ts</div>
+        <span style="color:var(--muted);align-self:center;">...</span>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>The manifest file is like your notebook's table of contents.</strong> It doesn't contain video data itself — just a map of where every segment lives. The client reads it first, then decides which quality playlist to follow, then downloads segments one by one.
+    </div>
+  </div>
+
+  <!-- SECTION 8 -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>HLS vs MPEG-DASH</h2>
+    </div>
+
+    <p>There are two major formats for Adaptive Bitrate Streaming. They do the same thing — just in slightly different ways.</p>
+
+    <div class="compare-grid">
+      <div class="compare-card c-blue">
+        <h4>📱 HLS — HTTP Live Streaming</h4>
+        <ul>
+          <li>Created by <strong>Apple</strong></li>
+          <li>Manifest file: <code>.m3u8</code></li>
+          <li>Segment files: <code>.ts</code> (MPEG-TS)</li>
+          <li>Native support on iOS, Safari, Apple TV</li>
+          <li>Most widely used on the web</li>
+          <li>Works over standard HTTP (no special server)</li>
+          <li>Used by YouTube, Twitch, TikTok</li>
+        </ul>
+      </div>
+      <div class="compare-card c-purple">
+        <h4>🌐 MPEG-DASH — Dynamic Adaptive Streaming over HTTP</h4>
+        <ul>
+          <li>Open standard (ISO/IEC)</li>
+          <li>Manifest file: <code>.mpd</code></li>
+          <li>Segment files: <code>.mp4</code> fragments</li>
+          <li>Codec-agnostic (more flexible)</li>
+          <li>Supported by Chrome, Firefox, Edge</li>
+          <li>Also works over standard HTTP</li>
+          <li>Used by Netflix, Amazon Prime</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="success">
+      <strong>✅ Bottom line for interviews:</strong> Both HLS and MPEG-DASH achieve Adaptive Bitrate Streaming. HLS is more widespread (especially for live streams). DASH is more flexible. Most modern platforms support both. The concepts — segments, manifest, client-side quality switching — are identical for both.
+    </div>
+
+    <table>
+      <thead><tr><th>Feature</th><th>HLS</th><th>MPEG-DASH</th></tr></thead>
+      <tbody>
+        <tr><td>Creator</td><td>Apple (2009)</td><td>ISO Standard (2012)</td></tr>
+        <tr><td>Manifest format</td><td><code>.m3u8</code></td><td><code>.mpd</code></td></tr>
+        <tr><td>Segment format</td><td><code>.ts</code></td><td><code>.mp4</code> frag</td></tr>
+        <tr><td>Native iOS/Safari</td><td>✅ Yes</td><td>❌ Need library</td></tr>
+        <tr><td>Codec flexibility</td><td>Limited</td><td>High</td></tr>
+        <tr><td>Live streaming</td><td>✅ Yes</td><td>✅ Yes</td></tr>
+        <tr><td>Used by</td><td>YouTube, Twitch, TikTok</td><td>Netflix, Amazon Prime</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 9 -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2>How the Client Adapts — The Algorithm</h2>
+    </div>
+
+    <p>The "adaptive" in ABR doesn't happen by magic. The client (your video player app) runs a continuous algorithm to decide which quality segment to download next.</p>
+
+    <div class="flow">
+      <div class="flow-title">🔄 Client ABR Algorithm (Continuous Loop)</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Step 1: Download manifest file (index.m3u8)
+          "Ok, I can have 240p, 360p, 480p, 720p, 1080p, 4K"
+
+  Step 2: Start with LOWEST quality (safe default)
+          "I'll start at 240p — we don't know the connection yet"
+
+  Step 3: Measure current network speed
+          (download speed = how fast the last segment arrived)
+
+  Step 4: Decision loop for EVERY next segment:
+          ┌──────────────────────────────────────────────┐
+          │ if current_speed > bitrate_of_quality_above: │
+          │   upgrade quality (e.g. 480p → 720p)         │
+          │ elif current_speed < bitrate_of_this_quality: │
+          │   downgrade quality (e.g. 720p → 480p)       │
+          │ else:                                        │
+          │   stay at current quality                    │
+          └──────────────────────────────────────────────┘
+
+  Step 5: Download next segment at chosen quality
+  Step 6: Go to Step 3 (repeat for every segment)</pre>
+    </div>
+
+    <div class="keypoint">
+      <strong>The exact algorithm varies by platform.</strong> Netflix uses "Buffer-based" ABR. YouTube uses a hybrid. Some use screen size as a factor (no point downloading 4K if your screen is 360p). The player decides — not the server. The server just stores all the segment options.
+    </div>
+
+    <h3>Real Example — Client Switching in Action</h3>
+    <div class="flow">
+      <div class="flow-title">📊 Quality Switching Over Time</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Time  Network Speed  Quality Selected
+  0s    Unknown        240p  ← start low, safe
+  10s   80 Mbps        720p  ← network is great, upgrade!
+  20s   80 Mbps        1080p ← still great, upgrade more!
+  30s   70 Mbps        1080p ← still fine, stay
+  40s   15 Mbps        720p  ← dropped, downgrade
+  50s   5 Mbps         480p  ← dropped more, downgrade again
+  60s   3 Mbps         360p  ← barely working, downgrade
+  70s   60 Mbps        720p  ← back on WiFi, upgrade!
+  80s   80 Mbps        1080p ← excellent again, max quality
+  
+  User experience: Video NEVER stopped. Quality changed — no buffering.</pre>
+    </div>
+  </div>
+
+  <!-- SECTION 10 -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2>Full Summary & Architecture Overview</h2>
+    </div>
+
+    <h3>The Evolution of Video Streaming</h3>
+    <div class="evo-timeline">
+      <div class="evo-item">
+        <div class="evo-era era-bad">Era 1</div>
+        <div class="evo-content">
+          <strong>Progressive Download</strong>
+          <span>Download entire video first. Then play. Huge wait. Bandwidth wasted. Called "buffering." Still used for small files.</span>
+        </div>
+      </div>
+      <div class="evo-item">
+        <div class="evo-era era-mid">Era 2</div>
+        <div class="evo-content">
+          <strong>RTMP / RTSP Streaming</strong>
+          <span>Stream in chunks. Play as they arrive. No full-download wait. But one fixed quality — no adaptation to network/device.</span>
+        </div>
+      </div>
+      <div class="evo-item">
+        <div class="evo-era era-good">Era 3 (Now)</div>
+        <div class="evo-content">
+          <strong>Adaptive Bitrate Streaming (HLS / MPEG-DASH)</strong>
+          <span>Pre-encode video at multiple qualities. Client picks best quality per segment. Dynamically adapts as network/device conditions change. No buffering. No wasted bandwidth.</span>
+        </div>
+      </div>
+    </div>
+
+    <h3>End-to-End Architecture for a Video Platform</h3>
+    <div class="flow">
+      <div class="flow-title">🏗️ Full Video Streaming System Architecture</div>
+      <pre style="color:var(--text);line-height:2.2">
+  UPLOAD FLOW:
+  Creator uploads video
+          │
+          ▼
+  Object Storage (S3) — stores raw file temporarily
+          │
+          ▼
+  Processing Queue (SQS) — "video needs encoding"
+          │
+          ▼
+  Transcoding Workers (EC2 GPU fleet)
+  ├── Encode to 240p → segments → S3
+  ├── Encode to 480p → segments → S3
+  ├── Encode to 720p → segments → S3
+  ├── Encode to 1080p → segments → S3
+  └── Encode to 4K   → segments → S3
+          │
+          ▼
+  Generate M3U8 / MPD manifest file → S3
+          │
+          ▼
+  Push all files to CDN (CloudFront) — worldwide distribution
+          │
+          ▼
+  Video marked as "published" in database ✅
+
+  ─────────────────────────────────────────────────────
+
+  PLAYBACK FLOW:
+  User clicks Play
+          │
+          ▼
+  Client fetches manifest file (M3U8) from CDN
+          │
+          ▼
+  Client reads manifest → knows all available qualities
+          │
+          ▼
+  Client measures network speed
+          │
+          ▼
+  Client picks best quality → fetches first segment from CDN
+          │
+          ▼
+  Segment plays immediately (no waiting!)
+          │
+          ▼
+  While playing: fetch next segment (maybe same, higher, or lower quality)
+          │
+          ▼
+  Repeat until video ends — adapting quality throughout ✅</pre>
+    </div>
+
+    <h3>Key Terms to Remember</h3>
+    <div class="recap-grid">
+      <div class="recap-card">
+        <div class="icon">🎬</div>
+        <h4>Frame / FPS</h4>
+        <p>A video = images played rapidly. FPS = frames per second. Higher FPS = smoother but bigger file.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📥</div>
+        <h4>Progressive Download</h4>
+        <p>Full file downloads before playback. Old, slow, wasteful. The original "buffering."</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📡</div>
+        <h4>RTMP / RTSP</h4>
+        <p>Specialized streaming protocols. Stream in chunks. Live support. But fixed quality.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🎯</div>
+        <h4>ABR Streaming</h4>
+        <p>Multiple quality levels. Client picks best in real-time. Adapts to network & device.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🧩</div>
+        <h4>Segments</h4>
+        <p>Small 2–10 second chunks of video at each quality level. Client downloads one at a time.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📋</div>
+        <h4>Manifest File</h4>
+        <p>The "index" — lists all available qualities and where every segment file is located. M3U8 (HLS) or MPD (DASH).</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📱</div>
+        <h4>HLS</h4>
+        <p>HTTP Live Streaming by Apple. Uses .m3u8 manifest. Most widely used, especially on iOS.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🌐</div>
+        <h4>MPEG-DASH</h4>
+        <p>Open standard ABR format. Uses .mpd manifest. More codec-flexible. Used by Netflix.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">⚙️</div>
+        <h4>Transcoding Pipeline</h4>
+        <p>Converts uploaded video into multiple quality segments before going live. Why YouTube takes 20–30 mins to process.</p>
+      </div>
+    </div>
+
+    <div class="info">
+      <strong>📌 Engineering reality:</strong> Building your own ABR pipeline is extremely complex and expensive — requires GPU clusters for encoding, massive object storage, global CDN, and constant maintenance. That's why most startups use managed services like ImageKit, AWS Elemental MediaConvert, Cloudflare Stream, or Mux for video processing and delivery.
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:.85rem;">
+    📼 Video 8 of the System Design Playlist &nbsp;|&nbsp;
+    Connects to: Part 1 (CDN) · Part 2 (scalability) · Video 5 (storage estimation) · Video 7 (consistent hashing for segments)
+  </div>
+
+</div>
+</body>
+</html>

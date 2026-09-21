@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design – Bloom Filters</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg:#0f1117; --card:#1a1d27; --card2:#1e2130; --border:#2d3148;
+    --accent:#5b8dee; --accent2:#a78bfa; --green:#34d399; --yellow:#fbbf24;
+    --red:#f87171; --orange:#fb923c; --teal:#2dd4bf; --pink:#f472b6;
+    --text:#e2e8f0; --muted:#8892a4; --code-bg:#13161f;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); line-height:1.7; padding:2rem 1rem; }
+  .container { max-width:880px; margin:0 auto; }
+
+  .header {
+    text-align:center; padding:2.5rem 2rem;
+    background:linear-gradient(135deg,#1a1d27,#1e2130);
+    border:1px solid var(--border); border-radius:16px; margin-bottom:2rem;
+    position:relative; overflow:hidden;
+  }
+  .header::before {
+    content:''; position:absolute; top:-60px; right:-60px; width:200px; height:200px;
+    background:radial-gradient(circle,rgba(52,211,153,0.15) 0%,transparent 70%); border-radius:50%;
+  }
+  .header .tag {
+    display:inline-block; background:rgba(52,211,153,0.15); color:var(--green);
+    font-size:.75rem; font-weight:600; letter-spacing:.08em; padding:.3rem .9rem;
+    border-radius:20px; border:1px solid rgba(52,211,153,0.3); margin-bottom:1rem; text-transform:uppercase;
+  }
+  .header h1 { font-size:2rem; font-weight:700; color:#fff; margin-bottom:.5rem; }
+  .header p  { color:var(--muted); font-size:.95rem; }
+
+  .toc { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin-bottom:2rem; }
+  .toc h2 { font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:1rem; }
+  .toc ol { padding-left:1.4rem; }
+  .toc li { margin-bottom:.4rem; }
+  .toc a  { color:var(--green); text-decoration:none; font-size:.93rem; }
+  .toc a:hover { text-decoration:underline; }
+
+  .section { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:2rem; margin-bottom:1.5rem; }
+  .section-header { display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+  .section-num {
+    width:36px; height:36px; background:linear-gradient(135deg,var(--green),var(--teal));
+    border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.9rem; color:#000; flex-shrink:0;
+  }
+  .section h2 { font-size:1.25rem; font-weight:700; color:#fff; }
+  h3 { font-size:1rem; font-weight:600; color:#fff; margin:1.4rem 0 .7rem; }
+  p  { margin-bottom:1rem; color:var(--text); font-size:.96rem; }
+  p:last-child { margin-bottom:0; }
+  code { background:var(--code-bg); padding:.1rem .4rem; border-radius:4px; color:var(--green); font-family:'JetBrains Mono',monospace; font-size:.88em; }
+
+  .keypoint { background:rgba(52,211,153,.08); border-left:3px solid var(--green);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .keypoint strong { color:var(--green); }
+  .success  { background:rgba(52,211,153,.08);  border-left:3px solid var(--green);  border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .success  strong { color:var(--green); }
+  .warn     { background:rgba(251,191,36,.08);  border-left:3px solid var(--yellow); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .warn     strong { color:var(--yellow); }
+  .danger   { background:rgba(248,113,113,.08); border-left:3px solid var(--red);    border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .danger   strong { color:var(--red); }
+  .info     { background:rgba(91,141,238,.08);  border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:.9rem 1.2rem; margin:1.2rem 0; font-size:.93rem; }
+  .info     strong { color:var(--accent); }
+
+  .flow { background:var(--code-bg); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin:1.2rem 0; font-family:'JetBrains Mono',monospace; font-size:.82rem; overflow-x:auto; }
+  .flow-title { font-size:.75rem; color:var(--muted); font-family:'Inter',sans-serif; text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem; }
+
+  .analogy { background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem; margin:1rem 0; display:flex; gap:1rem; align-items:flex-start; }
+  .analogy-icon { font-size:1.5rem; flex-shrink:0; }
+  .analogy-text { font-size:.9rem; }
+  .analogy-text strong { color:#fff; }
+
+  .compare-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .compare-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem; }
+  .compare-card h4 { font-size:.88rem; font-weight:600; margin-bottom:.8rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+  .compare-card.c-red    h4 { color:var(--red); }
+  .compare-card.c-green  h4 { color:var(--green); }
+  .compare-card.c-yellow h4 { color:var(--yellow); }
+  .compare-card.c-blue   h4 { color:var(--accent); }
+  .compare-card.c-teal   h4 { color:var(--teal); }
+  .compare-card.c-pink   h4 { color:var(--pink); }
+  .compare-card ul { padding-left:1.2rem; }
+  .compare-card li { font-size:.88rem; color:var(--muted); margin-bottom:.35rem; }
+
+  table { width:100%; border-collapse:collapse; margin:1.2rem 0; font-size:.88rem; }
+  th { background:var(--code-bg); color:var(--green); padding:.7rem 1rem; text-align:left; font-weight:600; border-bottom:2px solid var(--border); }
+  td { padding:.65rem 1rem; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(255,255,255,.02); }
+
+  /* Bit bucket visualizer */
+  .bucket-wrap { background:var(--code-bg); border:1px solid var(--border); border-radius:12px; padding:1.4rem; margin:1.2rem 0; }
+  .bucket-title { font-size:.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem; font-family:'Inter',sans-serif; }
+  .bucket-row { display:flex; align-items:center; gap:.4rem; margin-bottom:.6rem; flex-wrap:wrap; }
+  .bucket-label { font-size:.8rem; color:var(--muted); width:120px; flex-shrink:0; font-family:'JetBrains Mono',monospace; }
+  .bucket-cells { display:flex; gap:.25rem; }
+  .bit {
+    width:36px; height:36px; border-radius:7px; display:flex; align-items:center;
+    justify-content:center; font-size:.85rem; font-weight:700;
+    font-family:'JetBrains Mono',monospace; border:1px solid; flex-shrink:0;
+    position:relative; transition:all .2s;
+  }
+  .bit-zero { border-color:var(--border); background:rgba(255,255,255,.03); color:var(--muted); }
+  .bit-one  { border-color:var(--green);  background:rgba(52,211,153,.2);   color:var(--green); }
+  .bit-new  { border-color:var(--yellow); background:rgba(251,191,36,.2);   color:var(--yellow); }
+  .bit-check{ border-color:var(--teal);   background:rgba(45,212,191,.2);   color:var(--teal); }
+  .bit-fp   { border-color:var(--red);    background:rgba(248,113,113,.2);  color:var(--red); }
+  .bit-idx  { position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-size:.6rem; color:var(--muted); white-space:nowrap; }
+
+  /* Legend */
+  .legend { display:flex; gap:1rem; flex-wrap:wrap; margin:.8rem 0; }
+  .legend-item { display:flex; align-items:center; gap:.4rem; font-size:.78rem; color:var(--muted); }
+  .legend-dot { width:12px; height:12px; border-radius:3px; border:1px solid; flex-shrink:0; }
+  .ld-zero   { border-color:var(--border); background:rgba(255,255,255,.03); }
+  .ld-one    { border-color:var(--green);  background:rgba(52,211,153,.2); }
+  .ld-new    { border-color:var(--yellow); background:rgba(251,191,36,.2); }
+  .ld-fp     { border-color:var(--red);    background:rgba(248,113,113,.2); }
+
+  /* Trade-off ladder */
+  .tradeoff-row { display:flex; align-items:stretch; gap:0; margin:1.2rem 0; border-radius:12px; overflow:hidden; border:1px solid var(--border); }
+  .tradeoff-cell { flex:1; padding:1.2rem; }
+  .tradeoff-cell h4 { font-size:.82rem; font-weight:700; margin-bottom:.6rem; }
+  .tradeoff-cell p  { font-size:.82rem; color:var(--muted); margin:0; }
+  .tc-bad    { background:rgba(248,113,113,.06); }
+  .tc-bad    h4 { color:var(--red); }
+  .tc-ok     { background:rgba(251,191,36,.06);  border-left:1px solid var(--border); border-right:1px solid var(--border); }
+  .tc-ok     h4 { color:var(--yellow); }
+  .tc-good   { background:rgba(52,211,153,.06);  }
+  .tc-good   h4 { color:var(--green); }
+
+  /* Recap */
+  .recap-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1.2rem 0; }
+  .recap-card { background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center; }
+  .recap-card .icon { font-size:1.5rem; margin-bottom:.4rem; }
+  .recap-card h4 { font-size:.85rem; font-weight:600; color:#fff; margin-bottom:.3rem; }
+  .recap-card p  { font-size:.78rem; color:var(--muted); margin:0; }
+
+  /* formula highlight */
+  .formula { background:linear-gradient(135deg,rgba(52,211,153,.08),rgba(45,212,191,.08)); border:1px solid rgba(52,211,153,.3); border-radius:10px; padding:1rem 1.4rem; margin:1.2rem 0; font-family:'JetBrains Mono',monospace; font-size:.88rem; text-align:center; color:#fff; }
+  .formula .label { font-family:'Inter',sans-serif; font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem; }
+
+  /* Response pills */
+  .response-row { display:flex; gap:1rem; flex-wrap:wrap; margin:1rem 0; }
+  .resp-pill { padding:.7rem 1.2rem; border-radius:10px; font-size:.85rem; font-weight:600; border:1px solid; }
+  .r-yes    { background:rgba(52,211,153,.12); border-color:var(--green); color:var(--green); }
+  .r-no     { background:rgba(248,113,113,.12); border-color:var(--red); color:var(--red); }
+  .r-maybe  { background:rgba(251,191,36,.12); border-color:var(--yellow); color:var(--yellow); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="tag">📓 Study Notes — Video 10</div>
+    <h1>Bloom Filters</h1>
+    <p>The probabilistic data structure that checks membership in O(1) time — without storing the data itself</p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 What's Inside</h2>
+    <ol>
+      <li><a href="#s1">The Problem — Username Availability at Scale</a></li>
+      <li><a href="#s2">Solution 1 — Database Lookup (O(n), too slow)</a></li>
+      <li><a href="#s3">Solution 2 — Hash Map (O(1) but too much memory)</a></li>
+      <li><a href="#s4">The Trade-off Problem</a></li>
+      <li><a href="#s5">What is a Bloom Filter?</a></li>
+      <li><a href="#s6">False Positives — The Trade-off Explained</a></li>
+      <li><a href="#s7">How a Bloom Filter Works — Step by Step</a></li>
+      <li><a href="#s8">Inserting Data — Visual Walkthrough</a></li>
+      <li><a href="#s9">Checking Membership — Visual Walkthrough</a></li>
+      <li><a href="#s10">False Positive in Action — The "Apple" Example</a></li>
+      <li><a href="#s11">Reducing False Positives — Bucket Size</a></li>
+      <li><a href="#s12">Real World Uses & Full Summary</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>The Problem — Username Availability at Scale</h2>
+    </div>
+
+    <p>Imagine you're designing Twitter. When a new user signs up, they choose a username. Your system needs to instantly check: <strong>"Is this username already taken?"</strong></p>
+
+    <div class="flow">
+      <div class="flow-title">🐦 Twitter Username Check — The Challenge</div>
+      <pre style="color:var(--text);line-height:2.2">
+  User types "piyush" into the username field
+          │
+          ▼
+  Front end makes API call to backend:
+  "Hey, is 'piyush' available?"
+          │
+          ▼
+  Backend queries database:
+  SELECT * FROM users WHERE username = 'piyush' LIMIT 1;
+          │
+          ▼
+  Returns: ❌ TAKEN (or ✅ AVAILABLE)
+
+  Simple enough... until you have 20 MILLION users.
+  Now every username check = scanning 20M records!</pre>
+    </div>
+
+    <div class="danger">
+      <strong>❌ The Scale Problem:</strong><br>
+      • 20 million records to scan per check — expensive even with indexes<br>
+      • An average user tries <strong>2–3 usernames</strong> before finding an available one<br>
+      • So one signup = 2–3 database scans of 20 million records<br>
+      • Thousands of users signing up simultaneously = <strong>millions of heavy DB scans per minute</strong><br>
+      • Your database becomes a massive bottleneck
+    </div>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>Solution 1 — Database Scan (Slow)</h2>
+    </div>
+
+    <p>The most obvious approach — query the database directly every time.</p>
+
+    <div class="compare-grid">
+      <div class="compare-card c-green">
+        <h4>✅ Pros</h4>
+        <ul>
+          <li>Always 100% accurate</li>
+          <li>Simple to implement</li>
+          <li>No extra memory needed</li>
+        </ul>
+      </div>
+      <div class="compare-card c-red">
+        <h4>❌ Cons</h4>
+        <ul>
+          <li>O(n) lookup time — searches all records</li>
+          <li>Even with DB indexes, 20M records is heavy</li>
+          <li>Every signup = 2–3 such scans</li>
+          <li>DB gets crushed at Twitter/LinkedIn scale</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>Solution 2 — Hash Map (Fast but Memory Heavy)</h2>
+    </div>
+
+    <p>What if we keep all usernames in memory as a Hash Map? O(1) lookup — instant!</p>
+
+    <div class="flow">
+      <div class="flow-title">🗂️ Hash Map Approach</div>
+      <pre style="color:var(--text);line-height:2.2">
+  When a username is registered, add it to the map:
+  {
+    "piyush": true,
+    "john":   true,
+    "alice":  true,
+    ... 20 million more entries ...
+  }
+
+  Check if "piyush" is taken:
+  hashmap.get("piyush") → true → TAKEN ❌  (instant!)
+  hashmap.get("apple")  → null → AVAILABLE ✅ (instant!)</pre>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-green">
+        <h4>✅ Pros</h4>
+        <ul>
+          <li>O(1) lookup — constant time</li>
+          <li>No database scan needed</li>
+          <li>100% accurate answers</li>
+          <li>Very fast response</li>
+        </ul>
+      </div>
+      <div class="compare-card c-red">
+        <h4>❌ Cons</h4>
+        <ul>
+          <li>Stores EVERY username in memory</li>
+          <li>20 million entries × avg 10 bytes = 200 MB+</li>
+          <li>1000 new users/day = 1000 new entries daily</li>
+          <li>Memory grows forever — NOT space efficient</li>
+          <li>Expensive RAM at scale (Twitter = hundreds of GBs)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>The Trade-off Problem</h2>
+    </div>
+
+    <p>We're stuck between two bad options:</p>
+
+    <div class="tradeoff-row">
+      <div class="tradeoff-cell tc-bad">
+        <h4>❌ DB Scan</h4>
+        <p>Lookup: O(n) SLOW<br>Memory: ✅ Low<br>Accuracy: ✅ 100%</p>
+      </div>
+      <div class="tradeoff-cell tc-ok">
+        <h4>⚠️ Hash Map</h4>
+        <p>Lookup: O(1) FAST<br>Memory: ❌ HIGH<br>Accuracy: ✅ 100%</p>
+      </div>
+      <div class="tradeoff-cell tc-good">
+        <h4>✅ Bloom Filter</h4>
+        <p>Lookup: O(1) FAST<br>Memory: ✅ LOW<br>Accuracy: ~99%*</p>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>The goal:</strong> Find a data structure that gives us O(1) lookup speed AND low memory usage — even if we sacrifice a tiny bit of accuracy. Enter: <strong>Bloom Filter</strong>.
+    </div>
+  </div>
+
+  <!-- SECTION 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>What is a Bloom Filter?</h2>
+    </div>
+
+    <div class="keypoint">
+      <strong>Official definition:</strong> A Bloom Filter is a <em>space-efficient probabilistic data structure</em> that uses a <em>bit array</em> and <em>multiple hash functions</em> to test whether an element is a member of a set or not.
+    </div>
+
+    <p>Breaking that down in plain English:</p>
+
+    <div class="compare-grid">
+      <div class="compare-card c-blue">
+        <h4>📦 Two Components</h4>
+        <ul>
+          <li><strong>Bit Array (Buckets)</strong> — a row of 0s and 1s. Very compact — a million bits = only 125 KB!</li>
+          <li><strong>Hash Function(s)</strong> — takes input, returns position(s) in the bit array</li>
+        </ul>
+      </div>
+      <div class="compare-card c-teal">
+        <h4>🎯 Core Idea</h4>
+        <ul>
+          <li>When you INSERT a username: hash it → set those bit positions to 1</li>
+          <li>When you CHECK a username: hash it → look at those positions</li>
+          <li>All 1s? → Probably taken</li>
+          <li>Any 0? → Definitely NOT taken</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="analogy">
+      <div class="analogy-icon">🎯</div>
+      <div class="analogy-text">
+        <strong>Dart board analogy:</strong> Instead of writing the username itself, you throw darts at specific positions on a board. Different usernames hit different positions. If all the positions for a username have been hit before, it was probably registered. A blank position = definitely not registered.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>False Positives — The Key Trade-off</h2>
+    </div>
+
+    <p>This is the most important thing to understand about Bloom Filters. Their answers are <strong>not always 100% correct</strong>. But the errors only go one way.</p>
+
+    <h3>Three Possible Bloom Filter Responses</h3>
+    <div class="response-row">
+      <div class="resp-pill r-no">❌ Definitely NOT in set</div>
+      <div class="resp-pill r-maybe">⚠️ PROBABLY in set (might be wrong)</div>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-green">
+        <h4>✅ When Bloom Filter says "TAKEN" — 100% Certain</h4>
+        <ul>
+          <li>If something IS registered, Bloom Filter ALWAYS says "TAKEN"</li>
+          <li>It NEVER misses a registered username</li>
+          <li>This is called: <strong>No False Negatives</strong></li>
+          <li>Example: piyush is registered → BF always says "TAKEN"</li>
+        </ul>
+      </div>
+      <div class="compare-card c-yellow">
+        <h4>⚠️ When Bloom Filter says "AVAILABLE" — Not 100% Certain</h4>
+        <ul>
+          <li>Something NOT in set → BF usually says "AVAILABLE"</li>
+          <li>But sometimes says "TAKEN" even for unregistered names</li>
+          <li>This is called: <strong>False Positive</strong></li>
+          <li>Example: "apple" not registered, BF wrongly says "TAKEN"</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ What is a False Positive?</strong><br>
+      Bloom Filter says a username is "TAKEN" when it's actually NOT in the database. The user tries a different username unnecessarily — a minor inconvenience. But we <strong>never</strong> wrongly say an existing username is "AVAILABLE" (that would cause two users to have the same username — catastrophic!).
+    </div>
+
+    <div class="success">
+      <strong>✅ Why this trade-off is acceptable for Twitter:</strong><br>
+      If BF says "piyush_garg" is taken but it's actually free — the user just tries "piyush_garg1". That's fine! One lost username is not a system crash. But if a registered username was wrongly marked "available," two users would get the same handle — that CANNOT happen. Bloom Filters prevent that case completely.
+    </div>
+  </div>
+
+  <!-- SECTION 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>How a Bloom Filter Works — Step by Step</h2>
+    </div>
+
+    <p>A Bloom Filter has a <strong>bit array</strong> (row of 0s and 1s, all starting at 0) and a <strong>hash function</strong>.</p>
+
+    <div class="formula">
+      <div class="label">Core Algorithm</div>
+      INSERT username → hash(username) → get positions → set those bits to 1<br>
+      CHECK username → hash(username) → get positions → if ALL bits are 1 → PROBABLY TAKEN<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → if ANY bit is 0 → DEFINITELY AVAILABLE
+    </div>
+
+    <div class="bucket-wrap">
+      <div class="bucket-title">📦 Initial State — Empty Bloom Filter (10 buckets, all 0)</div>
+      <div class="bucket-row">
+        <div class="bucket-label">Start (empty):</div>
+        <div class="bucket-cells">
+          <div class="bit bit-zero"><span class="bit-idx">0</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">1</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">2</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">3</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">4</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">5</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">6</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">7</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">8</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">9</span>0</div>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot ld-zero"></div>0 = empty slot</div>
+        <div class="legend-item"><div class="legend-dot ld-one"></div>1 = occupied slot</div>
+        <div class="legend-item"><div class="legend-dot ld-new"></div>newly set bit</div>
+        <div class="legend-item"><div class="legend-dot ld-fp"></div>false positive bit</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 8 -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>Inserting Data — Visual Walkthrough</h2>
+    </div>
+
+    <h3>Step 1: Insert "piyush"</h3>
+    <p>Hash function takes "piyush" → returns positions <strong>0, 2, 4, 8</strong> → set those bits to 1.</p>
+
+    <div class="bucket-wrap">
+      <div class="bucket-title">After INSERT "piyush" → hash gives positions {0, 2, 4, 8}</div>
+      <div class="bucket-row">
+        <div class="bucket-label">"piyush" added:</div>
+        <div class="bucket-cells">
+          <div class="bit bit-one"><span class="bit-idx">0</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">1</span>0</div>
+          <div class="bit bit-one"><span class="bit-idx">2</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">3</span>0</div>
+          <div class="bit bit-one"><span class="bit-idx">4</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">5</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">6</span>0</div>
+          <div class="bit bit-zero"><span class="bit-idx">7</span>0</div>
+          <div class="bit bit-one"><span class="bit-idx">8</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">9</span>0</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">🔢 Hash Calculation for "piyush"</div>
+      <pre style="color:var(--text);line-height:2">
+  hash("piyush") → positions: 0, 2, 4, 8
+  Set bit[0] = 1 ✓
+  Set bit[2] = 1 ✓
+  Set bit[4] = 1 ✓
+  Set bit[8] = 1 ✓
+  → "piyush" is now registered in the bloom filter!</pre>
+    </div>
+
+    <h3>Step 2: Insert "john"</h3>
+    <p>Hash function takes "john" → returns positions <strong>1, 4, 6, 8</strong> → set those bits to 1. (Note: bit 4 and 8 are already 1 from "piyush" — that's fine, just leave as 1.)</p>
+
+    <div class="bucket-wrap">
+      <div class="bucket-title">After INSERT "john" → hash gives positions {1, 4, 6, 8}</div>
+      <div class="bucket-row">
+        <div class="bucket-label">"john" added:</div>
+        <div class="bucket-cells">
+          <div class="bit bit-one"><span class="bit-idx">0</span>1</div>
+          <div class="bit bit-new"><span class="bit-idx">1</span>1</div>
+          <div class="bit bit-one"><span class="bit-idx">2</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">3</span>0</div>
+          <div class="bit bit-one"><span class="bit-idx">4</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">5</span>0</div>
+          <div class="bit bit-new"><span class="bit-idx">6</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">7</span>0</div>
+          <div class="bit bit-one"><span class="bit-idx">8</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">9</span>0</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <strong>Important:</strong> Notice bits 4 and 8 were already set by "piyush". When "john" also needs those positions, we just leave them as 1. This <em>sharing of bit positions between different entries</em> is what causes false positives.
+    </div>
+  </div>
+
+  <!-- SECTION 9 -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2>Checking Membership — Visual Walkthrough</h2>
+    </div>
+
+    <h3>Check 1: Is "piyush" available? (It IS registered)</h3>
+    <div class="flow">
+      <div class="flow-title">🔍 CHECK "piyush" — Expected: TAKEN</div>
+      <pre style="color:var(--text);line-height:2.2">
+  hash("piyush") → same positions: 0, 2, 4, 8
+
+  Check bit[0] = 1? ✅ YES
+  Check bit[2] = 1? ✅ YES
+  Check bit[4] = 1? ✅ YES
+  Check bit[8] = 1? ✅ YES
+
+  ALL bits are 1 → "piyush" is TAKEN ❌
+  Result: CORRECT ✅ (piyush IS registered)</pre>
+    </div>
+
+    <h3>Check 2: Is "lemon" available? (It is NOT registered)</h3>
+    <div class="flow">
+      <div class="flow-title">🔍 CHECK "lemon" — Expected: AVAILABLE</div>
+      <pre style="color:var(--text);line-height:2.2">
+  hash("lemon") → positions: 1, 2, 4, 7
+
+  Check bit[1] = 1? ✅ YES (set by "john")
+  Check bit[2] = 1? ✅ YES (set by "piyush")
+  Check bit[4] = 1? ✅ YES (set by both)
+  Check bit[7] = 0? ❌ NO — empty!
+
+  At least one bit is 0 → "lemon" is DEFINITELY AVAILABLE ✅
+  Result: CORRECT ✅ ("lemon" is indeed NOT registered)</pre>
+    </div>
+
+    <div class="bucket-wrap">
+      <div class="bucket-title">Bit 7 is 0 → lemon is DEFINITELY AVAILABLE</div>
+      <div class="bucket-row">
+        <div class="bucket-label">Check "lemon":</div>
+        <div class="bucket-cells">
+          <div class="bit bit-one"><span class="bit-idx">0</span>1</div>
+          <div class="bit bit-check"><span class="bit-idx">1</span>1</div>
+          <div class="bit bit-check"><span class="bit-idx">2</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">3</span>0</div>
+          <div class="bit bit-check"><span class="bit-idx">4</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">5</span>0</div>
+          <div class="bit bit-one"><span class="bit-idx">6</span>1</div>
+          <div class="bit bit-fp"><span class="bit-idx">7</span>0</div>
+          <div class="bit bit-one"><span class="bit-idx">8</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">9</span>0</div>
+        </div>
+      </div>
+      <p style="font-size:.82rem;color:var(--red);margin-top:.8rem;">Bit 7 = 0 → STOP. "lemon" is definitely NOT registered. Safe to use! ✅</p>
+    </div>
+
+    <div class="success">
+      <strong>✅ The "any zero = definitely available" rule is 100% reliable!</strong><br>
+      If a username was registered, ALL its bit positions would have been set to 1. So finding even one 0 among its positions proves it was never registered. This is the guarantee: <strong>No False Negatives</strong>.
+    </div>
+  </div>
+
+  <!-- SECTION 10 -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2>False Positive in Action — The "Apple" Example</h2>
+    </div>
+
+    <p>This is the crucial moment. Let's see a false positive happen.</p>
+
+    <div class="flow">
+      <div class="flow-title">🍎 CHECK "apple" — It is NOT registered, but...</div>
+      <pre style="color:var(--text);line-height:2.2">
+  Registered usernames: only "piyush" and "john"
+  hash("apple") → positions: 1, 2, 6, 8
+
+  Current bit array: [1,1,1,0,1,0,1,0,1,0]
+
+  Check bit[1] = 1? ✅ YES (set by "john")
+  Check bit[2] = 1? ✅ YES (set by "piyush")
+  Check bit[6] = 1? ✅ YES (set by "john")
+  Check bit[8] = 1? ✅ YES (set by both)
+
+  ALL bits are 1 → Bloom Filter says: "apple" is TAKEN ❌
+
+  But... "apple" was NEVER registered! Nobody registered it!
+  This is a FALSE POSITIVE. 🎯</pre>
+    </div>
+
+    <div class="bucket-wrap">
+      <div class="bucket-title">⚠️ False Positive — "apple" not registered but all its bits are already set</div>
+      <div class="bucket-row">
+        <div class="bucket-label">Check "apple":</div>
+        <div class="bucket-cells">
+          <div class="bit bit-one"><span class="bit-idx">0</span>1</div>
+          <div class="bit bit-fp"><span class="bit-idx">1</span>1</div>
+          <div class="bit bit-fp"><span class="bit-idx">2</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">3</span>0</div>
+          <div class="bit bit-one"><span class="bit-idx">4</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">5</span>0</div>
+          <div class="bit bit-fp"><span class="bit-idx">6</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">7</span>0</div>
+          <div class="bit bit-fp"><span class="bit-idx">8</span>1</div>
+          <div class="bit bit-zero"><span class="bit-idx">9</span>0</div>
+        </div>
+      </div>
+      <p style="font-size:.82rem;color:var(--red);margin-top:.8rem;">All 4 bits (1,2,6,8) already set by OTHER users → BF wrongly thinks "apple" is taken</p>
+    </div>
+
+    <div class="warn">
+      <strong>⚠️ Why did this happen?</strong><br>
+      "piyush" set bits 0,2,4,8. "john" set bits 1,4,6,8. Together, they accidentally covered ALL the bit positions that "apple" would need (1,2,6,8). So even though nobody registered "apple," all its bit positions are occupied — giving a false positive.
+    </div>
+
+    <div class="info">
+      <strong>Consequence of a false positive:</strong> The user trying to register "apple" gets told "sorry, this username is taken." They try "apple1" — and that works fine. No data corruption, no security issue. Just one username slot wasted. At Twitter's scale, this small waste is totally acceptable compared to the performance gains.
+    </div>
+  </div>
+
+  <!-- SECTION 11 -->
+  <div class="section" id="s11">
+    <div class="section-header">
+      <div class="section-num">11</div>
+      <h2>Reducing False Positives — Bigger Bucket Size</h2>
+    </div>
+
+    <p>The reason we got a false positive with "apple" is because our bit array only had <strong>10 buckets</strong>. With only 10 slots and 2 users, collisions are very common.</p>
+
+    <div class="keypoint">
+      <strong>The Fix:</strong> Increase the bit array (bucket) size. More buckets = fewer collisions = fewer false positives. The beauty is that even 1000 bits = only 125 bytes of memory — still tiny!
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card c-red">
+        <h4>❌ Small Bucket (10 bits)</h4>
+        <ul>
+          <li>Hash returns 0–9 only</li>
+          <li>Positions collide frequently</li>
+          <li>High false positive rate</li>
+          <li>Only good for tiny datasets</li>
+          <li>Our "apple" example had this problem</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>✅ Large Bucket (1000+ bits)</h4>
+        <ul>
+          <li>Hash returns 0–999</li>
+          <li>Positions rarely collide</li>
+          <li>Very low false positive rate</li>
+          <li>Good for millions of entries</li>
+          <li>1000 bits = only 125 BYTES of RAM!</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-title">📐 Memory Comparison</div>
+      <pre style="color:var(--text);line-height:2.2">
+  20 million usernames, average 10 chars each:
+
+  Method 1 — Store in DB:
+  20M × 10 bytes = 200 MB (+ index overhead)
+
+  Method 2 — Hash Map in memory:
+  20M × ~50 bytes (key + value + overhead) = 1 GB RAM!
+
+  Method 3 — Bloom Filter:
+  1 million bits (large enough bucket) = only 125 KB !!!
+  Even 100 million bits = 12.5 MB — incredibly efficient!
+
+  Trade-off: ~1–2% false positive rate → totally acceptable!</pre>
+    </div>
+
+    <div class="success">
+      <strong>✅ That's the power of Bloom Filters!</strong><br>
+      Check 20 million usernames in O(1) time, using only ~125 KB of RAM, with ~1% false positive rate. For a platform like Twitter, this saves enormous database load while the tiny error rate only causes minor inconvenience (user tries a different username).
+    </div>
+
+    <h3>Tuning Tips from the Video</h3>
+    <div class="compare-grid">
+      <div class="compare-card c-teal">
+        <h4>🎯 Good Hash Function</h4>
+        <ul>
+          <li>Must spread outputs widely and evenly</li>
+          <li>Poor hash → cluster collisions → more false positives</li>
+          <li>Use multiple hash functions for even better results</li>
+          <li>Common: MurmurHash, FNV, SHA-256 (truncated)</li>
+        </ul>
+      </div>
+      <div class="compare-card c-green">
+        <h4>📦 Bucket Size Strategy</h4>
+        <ul>
+          <li>Scale bucket size with your user count</li>
+          <li>As users grow, you may need to rebuild with bigger array</li>
+          <li>Rule of thumb: 10× bits per element for ~1% error rate</li>
+          <li>Use 2 hash functions to further reduce collisions</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 12 -->
+  <div class="section" id="s12">
+    <div class="section-header">
+      <div class="section-num">12</div>
+      <h2>Real World Uses & Full Summary</h2>
+    </div>
+
+    <h3>Where Bloom Filters Are Used in Production</h3>
+    <table>
+      <thead><tr><th>System</th><th>Use Case</th><th>What the Bloom Filter Checks</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Twitter / LinkedIn</strong></td><td>Username availability on signup</td><td>"Is this username already registered?"</td></tr>
+        <tr><td><strong>Gmail</strong></td><td>Email address availability</td><td>"Is this email already taken?"</td></tr>
+        <tr><td><strong>Google Chrome</strong></td><td>Malicious URL detection</td><td>"Is this URL in our blocklist?"</td></tr>
+        <tr><td><strong>Email spam filters</strong></td><td>Spam detection</td><td>"Is this sender/domain flagged as spam?"</td></tr>
+        <tr><td><strong>Apache Cassandra</strong></td><td>Avoid disk reads</td><td>"Does this key exist in this SStable?"</td></tr>
+        <tr><td><strong>Bitcoin / Blockchain</strong></td><td>Transaction lookup</td><td>"Has this transaction been processed?"</td></tr>
+        <tr><td><strong>CDN / Caching</strong></td><td>Cache check before DB</td><td>"Is this URL already cached?"</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Key Rules to Remember</h3>
+    <div class="compare-grid">
+      <div class="compare-card c-green">
+        <h4>✅ Bloom Filter GUARANTEES</h4>
+        <ul>
+          <li>If it says "DEFINITELY NOT IN SET" → 100% correct</li>
+          <li>If something IS in the set → ALWAYS says "in set"</li>
+          <li>No False Negatives — ever</li>
+          <li>O(1) lookup time — always fast</li>
+          <li>Tiny memory footprint — even at huge scale</li>
+        </ul>
+      </div>
+      <div class="compare-card c-yellow">
+        <h4>⚠️ Bloom Filter DOES NOT GUARANTEE</h4>
+        <ul>
+          <li>If it says "in set" — might be wrong (false positive)</li>
+          <li>Cannot DELETE entries (bits are shared)</li>
+          <li>Cannot retrieve the actual data stored</li>
+          <li>False positive rate grows as it fills up</li>
+          <li>Not suitable when 100% accuracy is required</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>📖 Quick Recap Cards</h3>
+    <div class="recap-grid">
+      <div class="recap-card">
+        <div class="icon">🗳️</div>
+        <h4>Bit Array</h4>
+        <p>A row of 0s and 1s. The "memory" of the Bloom Filter. Very compact — 1M bits = 125 KB.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🔢</div>
+        <h4>Hash Function</h4>
+        <p>Maps input (username) to bit positions in the array. Must be deterministic and spread widely.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">🚨</div>
+        <h4>False Positive</h4>
+        <p>BF says "TAKEN" but it's actually free. Happens when bits are accidentally set by other entries.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">✅</div>
+        <h4>No False Negatives</h4>
+        <p>If something IS registered, BF ALWAYS says "TAKEN." It never misses a real entry.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">📦</div>
+        <h4>Bucket Size</h4>
+        <p>Larger bit array = fewer collisions = lower false positive rate. Scale with your data volume.</p>
+      </div>
+      <div class="recap-card">
+        <div class="icon">⚖️</div>
+        <h4>When to Use</h4>
+        <p>Only at massive scale (Twitter, LinkedIn level). Small apps don't need it — DB is fine.</p>
+      </div>
+    </div>
+
+    <div class="info">
+      <strong>📌 When NOT to use a Bloom Filter:</strong> If you have a small number of users (thousands), your database handles the lookup fine. Bloom Filters are specifically designed for cases where DB lookups at scale become a bottleneck — think 20M+ users with high write/check frequency.
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:.85rem;">
+    📼 Video 10 of the System Design Playlist &nbsp;|&nbsp;
+    Connects to: Back of Envelope (memory calculations) · Consistent Hashing (hash functions) · Rate Limiting (access control)
+  </div>
+
+</div>
+</body>
+</html>
